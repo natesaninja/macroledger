@@ -269,6 +269,7 @@ export const DEFAULT_SETTINGS = {
   onboarding_complete: "0",
   adaptive_enabled: "1",
   units: "imperial",
+  ui_theme: "midnight",
 };
 
 export async function getSettings() {

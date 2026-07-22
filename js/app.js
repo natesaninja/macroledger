@@ -73,6 +73,70 @@ const MEALS = [
 ];
 const CIRC = 2 * Math.PI * 52;
 
+const UI_THEMES = [
+  {
+    id: "midnight",
+    name: "Midnight",
+    desc: "Default dark green",
+    swatches: ["#0f1419", "#00c47a", "#5b8def"],
+  },
+  {
+    id: "light",
+    name: "Light",
+    desc: "Bright & clean",
+    swatches: ["#f4f6f9", "#0a9f68", "#3b6fd9"],
+  },
+  {
+    id: "ocean",
+    name: "Ocean",
+    desc: "Cool blue dark",
+    swatches: ["#0a1220", "#3dbbff", "#3dffb0"],
+  },
+  {
+    id: "sunset",
+    name: "Sunset",
+    desc: "Warm coral",
+    swatches: ["#1a1010", "#ff7a45", "#ff5c8a"],
+  },
+  {
+    id: "contrast",
+    name: "High contrast",
+    desc: "Max readability",
+    swatches: ["#000000", "#39ff14", "#ffffff"],
+  },
+];
+
+function applyTheme(themeId) {
+  const id = UI_THEMES.some((t) => t.id === themeId) ? themeId : "midnight";
+  document.documentElement.setAttribute("data-theme", id);
+  // Match browser chrome where supported
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+  if (meta && accent) meta.setAttribute("content", accent);
+  return id;
+}
+
+function renderThemePicker(activeId) {
+  const grid = document.getElementById("theme-grid");
+  if (!grid) return;
+  const active = activeId || "midnight";
+  grid.innerHTML = UI_THEMES.map(
+    (t) => `
+    <button type="button" class="theme-card ${t.id === active ? "active" : ""}" data-theme="${t.id}" role="option" aria-selected="${t.id === active}">
+      <div class="tc-name">${escapeHtml(t.name)}</div>
+      <div class="tc-swatches">${t.swatches.map((c) => `<i style="background:${c}"></i>`).join("")}</div>
+    </button>`
+  ).join("");
+  grid.querySelectorAll(".theme-card").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = applyTheme(btn.dataset.theme);
+      renderThemePicker(id);
+      await setSettings({ ui_theme: id });
+      toast(`${UI_THEMES.find((t) => t.id === id)?.name || id} theme on`);
+    });
+  });
+}
+
 let currentDate = todayISO();
 let settings = null;
 let selectedFood = null;
@@ -921,6 +985,7 @@ async function loadMealsView() {
 
 async function loadGoals() {
   settings = await getSettings();
+  renderThemePicker(settings.ui_theme || "midnight");
   const map = {
     "set-user-name": "user_name",
     "set-weight": "body_weight_lb",
@@ -1731,6 +1796,14 @@ async function boot() {
   // Recover data BEFORE seed/onboarding so updates don't wipe you
   await tryRestoreUserData();
 
+  // Apply saved theme ASAP
+  try {
+    const s0 = await getSettings();
+    applyTheme(s0.ui_theme || "midnight");
+  } catch {
+    applyTheme("midnight");
+  }
+
   await ensureSeeded(SEED_FOODS);
   // Version key must bump when RESTAURANT_FOODS grows so existing phones get new chains
   const addedRestaurants = await ensureRestaurantFoods(RESTAURANT_FOODS, "eastcoast_v2");
@@ -1754,7 +1827,7 @@ async function boot() {
   // Quiet SW updates — do NOT tell users to delete the Home Screen icon
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=8persist", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=9", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -1778,7 +1851,7 @@ async function boot() {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== "macroledger-v8-persist").map((k) => caches.delete(k))
+        keys.filter((k) => k !== "macroledger-v9-themes").map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */
