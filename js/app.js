@@ -4,6 +4,7 @@
 import {
   ensureSeeded,
   ensureRestaurantFoods,
+  migrateLegacyDatabases,
   getSettings,
   setSettings,
   goalsFromSettings,
@@ -57,6 +58,12 @@ import {
   decodeBarcodeFromFile,
   cameraHelp,
 } from "./barcode-scan.js";
+import {
+  loadLocalBackup,
+  loadProfileBackup,
+  saveProfileBackup,
+  scheduleFullBackup,
+} from "./persist.js";
 
 const MEALS = [
   { id: "breakfast", label: "Breakfast", icon: "🌅" },
@@ -1126,8 +1133,11 @@ function setupOnboarding() {
     if (!sug) sug = await computeOnboardingSuggestion(onboardDraft);
     if (!sug.ok) return toast(sug.error);
     await completeOnboarding(onboardDraft, sug);
+    const s = await getSettings();
+    saveProfileBackup(s);
+    scheduleFullBackup(exportAllJson);
     document.getElementById("onboard").hidden = true;
-    toast("You're set — log your first meal!");
+    toast("You're set — profile is saved on this phone");
     loadDay();
   };
 }
@@ -1672,9 +1682,55 @@ function setup() {
   });
 }
 
+async function tryRestoreUserData() {
+  // 1) Migrate from old IndexedDB names (rebrand wiped this before)
+  try {
+    await migrateLegacyDatabases();
+  } catch (e) {
+    console.warn("IDB migrate failed", e);
+  }
+
+  // 2) If still no profile, restore full localStorage backup
+  let s = await getSettings();
+  if (s.onboarding_complete === "1" || (s.body_weight_lb && String(s.body_weight_lb).trim())) {
+    saveProfileBackup(s);
+    scheduleFullBackup(exportAllJson);
+    return { restored: false };
+  }
+
+  const full = loadLocalBackup();
+  if (full && (full.settings || full.diary)) {
+    try {
+      await importAllJson(full);
+      await setSettings({ onboarding_complete: "1" });
+      toast("Restored your saved diary & profile");
+      return { restored: true };
+    } catch (e) {
+      console.warn("full restore failed", e);
+    }
+  }
+
+  // 3) Profile-only backup
+  const prof = loadProfileBackup();
+  if (prof?.settings) {
+    try {
+      await setSettings({ ...prof.settings, onboarding_complete: "1" });
+      toast("Restored your profile settings");
+      return { restored: true };
+    } catch (e) {
+      console.warn("profile restore failed", e);
+    }
+  }
+  return { restored: false };
+}
+
 // ---- boot ----
 async function boot() {
   setup();
+
+  // Recover data BEFORE seed/onboarding so updates don't wipe you
+  await tryRestoreUserData();
+
   await ensureSeeded(SEED_FOODS);
   // Version key must bump when RESTAURANT_FOODS grows so existing phones get new chains
   const addedRestaurants = await ensureRestaurantFoods(RESTAURANT_FOODS, "eastcoast_v2");
@@ -1686,39 +1742,31 @@ async function boot() {
     document.getElementById("onboard").hidden = false;
     onboardStep = 0;
     showOnboardStep();
+  } else {
+    // Keep mirror fresh
+    const s = await getSettings();
+    saveProfileBackup(s);
+    scheduleFullBackup(exportAllJson);
   }
 
   await loadDay();
 
-  // Force fresh app shell on iPhone (kills old MacroLedger caches)
+  // Quiet SW updates — do NOT tell users to delete the Home Screen icon
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=7", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=8persist", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
-      if (reg.waiting) {
-        reg.waiting.postMessage("SKIP_WAITING");
-      }
+      if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
       reg.addEventListener("updatefound", () => {
         const nw = reg.installing;
         if (!nw) return;
         nw.addEventListener("statechange", () => {
           if (nw.state === "installed" && navigator.serviceWorker.controller) {
             nw.postMessage("SKIP_WAITING");
-            // reload once to pick up MacroLedger + scanner
-            if (!sessionStorage.getItem("ml-reloaded")) {
-              sessionStorage.setItem("ml-reloaded", "1");
-              location.reload();
-            }
           }
         });
-      });
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (!sessionStorage.getItem("ml-reloaded2")) {
-          sessionStorage.setItem("ml-reloaded2", "1");
-          location.reload();
-        }
       });
       console.log("SW registered", reg.scope);
     } catch (e) {
@@ -1726,14 +1774,11 @@ async function boot() {
     }
   }
 
-  // Clear ancient Cache API entries from prior app names
   if (window.caches) {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys
-          .filter((k) => k !== "macroledger-v7-zxing")
-          .map((k) => caches.delete(k))
+        keys.filter((k) => k !== "macroledger-v8-persist").map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */

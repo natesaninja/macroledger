@@ -1,59 +1,190 @@
 ﻿/**
- * IndexedDB — MacroLedger PWA v2 (onboarding, favorites, meals, biometrics)
- * DB_NAME kept stable so existing user data is preserved.
+ * IndexedDB — MacroLedger user data
+ *
+ * PERMANENT name — never rename this. Past renames (calorietrack-pwa → MacroLedger-pwa)
+ * wiped profiles; we migrate from legacy names once.
  */
-const DB_NAME = "MacroLedger-pwa";
+const DB_NAME = "ml-user-data-v1";
 const DB_VERSION = 2;
 
-function openDb() {
+/** Old DB names from earlier builds (PowerShell renames changed these accidentally). */
+const LEGACY_DB_NAMES = [
+  "calorietrack-pwa",
+  "CalorieTrack-pwa",
+  "MacroLedger-pwa",
+  "MacroChip-pwa",
+  "macrochip-pwa",
+  "Macro Chip-pwa",
+];
+
+function openNamedDb(name, version = DB_VERSION) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(name, version);
     req.onupgradeneeded = (e) => {
+      // Only create schema for our permanent DB (or empty legacy opens)
+      if (name !== DB_NAME && e.oldVersion === 0) {
+        // Don't invent schema on accidental legacy creates — abort by not creating? 
+        // Actually opening non-existent legacy just creates empty - we'll detect empty.
+      }
       const db = req.result;
       const old = e.oldVersion;
-
-      if (old < 1) {
-        db.createObjectStore("settings", { keyPath: "key" });
-        const foods = db.createObjectStore("foods", { keyPath: "id", autoIncrement: true });
-        foods.createIndex("name", "name", { unique: false });
-        foods.createIndex("barcode", "barcode", { unique: false });
-        const diary = db.createObjectStore("diary", { keyPath: "id", autoIncrement: true });
-        diary.createIndex("entry_date", "entry_date", { unique: false });
-        const ex = db.createObjectStore("exercise", { keyPath: "id", autoIncrement: true });
-        ex.createIndex("entry_date", "entry_date", { unique: false });
-        const w = db.createObjectStore("weight", { keyPath: "id", autoIncrement: true });
-        w.createIndex("log_date", "log_date", { unique: true });
-        db.createObjectStore("water", { keyPath: "log_date" });
-        db.createObjectStore("meta", { keyPath: "key" });
-      }
-
-      if (old < 2) {
-        if (!db.objectStoreNames.contains("favorites")) {
-          db.createObjectStore("favorites", { keyPath: "food_id" });
-        }
-        if (!db.objectStoreNames.contains("recents")) {
-          const r = db.createObjectStore("recents", { keyPath: "food_id" });
-          r.createIndex("last_used_at", "last_used_at", { unique: false });
-        }
-        if (!db.objectStoreNames.contains("saved_meals")) {
-          db.createObjectStore("saved_meals", { keyPath: "id", autoIncrement: true });
-        }
-        if (!db.objectStoreNames.contains("biometrics")) {
-          const b = db.createObjectStore("biometrics", { keyPath: "id", autoIncrement: true });
-          b.createIndex("log_date", "log_date", { unique: false });
-          b.createIndex("kind", "kind", { unique: false });
-        }
-        if (!db.objectStoreNames.contains("daily_targets")) {
-          db.createObjectStore("daily_targets", { keyPath: "date" });
-        }
-        if (!db.objectStoreNames.contains("streaks")) {
-          db.createObjectStore("streaks", { keyPath: "key" });
-        }
-      }
+      ensureSchema(db, old);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+function ensureSchema(db, oldVersion) {
+  const old = oldVersion || 0;
+  if (old < 1) {
+    if (!db.objectStoreNames.contains("settings")) {
+      db.createObjectStore("settings", { keyPath: "key" });
+    }
+    if (!db.objectStoreNames.contains("foods")) {
+      const foods = db.createObjectStore("foods", { keyPath: "id", autoIncrement: true });
+      foods.createIndex("name", "name", { unique: false });
+      foods.createIndex("barcode", "barcode", { unique: false });
+    }
+    if (!db.objectStoreNames.contains("diary")) {
+      const diary = db.createObjectStore("diary", { keyPath: "id", autoIncrement: true });
+      diary.createIndex("entry_date", "entry_date", { unique: false });
+    }
+    if (!db.objectStoreNames.contains("exercise")) {
+      const ex = db.createObjectStore("exercise", { keyPath: "id", autoIncrement: true });
+      ex.createIndex("entry_date", "entry_date", { unique: false });
+    }
+    if (!db.objectStoreNames.contains("weight")) {
+      const w = db.createObjectStore("weight", { keyPath: "id", autoIncrement: true });
+      w.createIndex("log_date", "log_date", { unique: true });
+    }
+    if (!db.objectStoreNames.contains("water")) {
+      db.createObjectStore("water", { keyPath: "log_date" });
+    }
+    if (!db.objectStoreNames.contains("meta")) {
+      db.createObjectStore("meta", { keyPath: "key" });
+    }
+  }
+  if (old < 2) {
+    if (!db.objectStoreNames.contains("favorites")) {
+      db.createObjectStore("favorites", { keyPath: "food_id" });
+    }
+    if (!db.objectStoreNames.contains("recents")) {
+      const r = db.createObjectStore("recents", { keyPath: "food_id" });
+      r.createIndex("last_used_at", "last_used_at", { unique: false });
+    }
+    if (!db.objectStoreNames.contains("saved_meals")) {
+      db.createObjectStore("saved_meals", { keyPath: "id", autoIncrement: true });
+    }
+    if (!db.objectStoreNames.contains("biometrics")) {
+      const b = db.createObjectStore("biometrics", { keyPath: "id", autoIncrement: true });
+      b.createIndex("log_date", "log_date", { unique: false });
+      b.createIndex("kind", "kind", { unique: false });
+    }
+    if (!db.objectStoreNames.contains("daily_targets")) {
+      db.createObjectStore("daily_targets", { keyPath: "date" });
+    }
+    if (!db.objectStoreNames.contains("streaks")) {
+      db.createObjectStore("streaks", { keyPath: "key" });
+    }
+  }
+}
+
+async function dumpDb(db) {
+  const out = {};
+  for (const name of Array.from(db.objectStoreNames)) {
+    out[name] = await reqToPromise(db.transaction(name, "readonly").objectStore(name).getAll());
+  }
+  return out;
+}
+
+async function countUseful(dump) {
+  const settings = dump.settings || [];
+  const diary = dump.diary || [];
+  const weight = dump.weight || [];
+  const hasProfile = settings.some(
+    (s) =>
+      (s.key === "onboarding_complete" && String(s.value) === "1") ||
+      (s.key === "body_weight_lb" && String(s.value || "").trim() !== "") ||
+      (s.key === "calorie_goal" && String(s.value || "") !== "" && String(s.value) !== "2000")
+  );
+  return {
+    score: (hasProfile ? 100 : 0) + diary.length * 2 + weight.length * 5 + settings.length,
+    hasProfile,
+    diary: diary.length,
+  };
+}
+
+let _migratePromise = null;
+
+/** One-time: copy richest legacy DB into permanent ml-user-data-v1 */
+export async function migrateLegacyDatabases() {
+  if (_migratePromise) return _migratePromise;
+  _migratePromise = (async () => {
+    const main = await openNamedDb(DB_NAME, DB_VERSION);
+    let mainDump = await dumpDb(main);
+    let mainScore = await countUseful(mainDump);
+
+    let best = { name: DB_NAME, dump: mainDump, score: mainScore.score };
+
+    let known = null;
+    try {
+      if (indexedDB.databases) {
+        known = new Set((await indexedDB.databases()).map((d) => d.name).filter(Boolean));
+      }
+    } catch {
+      known = null;
+    }
+
+    for (const legacy of LEGACY_DB_NAMES) {
+      try {
+        // Avoid creating empty DBs just by probing
+        if (known && !known.has(legacy)) continue;
+        const db = await openNamedDb(legacy, DB_VERSION);
+        const dump = await dumpDb(db);
+        const useful = await countUseful(dump);
+        db.close();
+        if (useful.score > best.score) {
+          best = { name: legacy, dump, score: useful.score };
+        }
+      } catch (e) {
+        console.warn("legacy scan failed", legacy, e);
+      }
+    }
+
+    // If main is empty-ish and best is a legacy DB, import it
+    if (best.name !== DB_NAME && best.score > mainScore.score) {
+      console.log("Migrating user data from", best.name, "score", best.score);
+      await importDumpIntoMain(best.dump);
+      mainDump = best.dump;
+    }
+    main.close();
+    return best;
+  })();
+  return _migratePromise;
+}
+
+async function importDumpIntoMain(dump) {
+  const db = await openNamedDb(DB_NAME, DB_VERSION);
+  const stores = Array.from(db.objectStoreNames);
+  // Clear then put
+  for (const name of stores) {
+    if (!dump[name]) continue;
+    const tx = db.transaction(name, "readwrite");
+    tx.objectStore(name).clear();
+    await txDone(tx);
+    const tx2 = db.transaction(name, "readwrite");
+    const store = tx2.objectStore(name);
+    for (const row of dump[name]) {
+      store.put(row);
+    }
+    await txDone(tx2);
+  }
+  db.close();
+}
+
+function openDb() {
+  return openNamedDb(DB_NAME, DB_VERSION);
 }
 
 function txDone(tx) {
@@ -151,7 +282,16 @@ export async function setSettings(partial) {
   for (const [key, value] of Object.entries(partial)) {
     await dbPut("settings", { key, value: String(value ?? "") });
   }
-  return getSettings();
+  const all = await getSettings();
+  // Notify app layer to autosave (dynamic import avoids circular deps)
+  try {
+    const { saveProfileBackup, scheduleFullBackup } = await import("./persist.js");
+    saveProfileBackup(all);
+    scheduleFullBackup(exportAllJson);
+  } catch {
+    /* ok */
+  }
+  return all;
 }
 
 export function goalsFromSettings(s) {
@@ -306,6 +446,12 @@ export async function addDiaryEntry(entry) {
   const id = await dbAdd("diary", row);
   if (row.food_id) await touchRecent(row.food_id);
   await bumpStreak(row.entry_date);
+  try {
+    const { scheduleFullBackup } = await import("./persist.js");
+    scheduleFullBackup(exportAllJson);
+  } catch {
+    /* ok */
+  }
   return { ...row, id };
 }
 
