@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=6" />
+  <link rel="manifest" href="manifest.webmanifest?v=7" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=6" />
+  <link rel="stylesheet" href="css/app.css?v=7" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">🔥 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">MacroLedger v6 · WH + Sheetz</span>
+      <span id="app-version" class="app-version">MacroLedger v7 · ZXing scan</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -328,8 +328,11 @@
         </div>
         <p class="barcode-hint">Camera works on this HTTPS app (iPhone Safari). Point at UPC/EAN — needs internet for new products.</p>
         <div id="camera-scan-wrap" class="camera-scan-wrap" hidden>
-          <div id="barcode-reader" class="barcode-reader"></div>
-          <video id="camera-video" playsinline muted webkit-playsinline hidden></video>
+          <div class="scan-stage">
+            <video id="camera-video" class="scan-video" playsinline muted webkit-playsinline></video>
+            <div class="scan-reticle" aria-hidden="true"></div>
+            <canvas id="scan-canvas" class="scan-canvas" hidden></canvas>
+          </div>
           <div class="scan-actions">
             <button type="button" class="ghost-btn" id="camera-flip-btn">🔄 Flip camera</button>
             <button type="button" class="ghost-btn" id="camera-stop-btn">Stop</button>
@@ -339,8 +342,8 @@
             </label>
           </div>
           <p class="hint" style="margin:0.25rem 0.5rem 0.75rem">
-            Use the <strong>back</strong> camera. Hold the phone so the barcode fills the wide box.
-            If it won’t read, use <strong>Photo of barcode</strong> or type the numbers (typing always works).
+            View is <strong>zoomed on the center</strong> on purpose. Line up the barcode bars in the box.
+            Still stuck? Use <strong>Photo of barcode</strong> or type the numbers.
           </p>
         </div>
         <p class="barcode-status" id="barcode-status" hidden></p>
@@ -450,6 +453,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=6"></script>
+  <script type="module" src="js/app.js?v=7"></script>
 </body>
 </html>

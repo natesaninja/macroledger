@@ -1553,20 +1553,38 @@ body {
   .entry-actions button { min-width: 36px; min-height: 36px; }
 }
 
-/* Barcode scanner (iOS + HTTPS) */
-.barcode-reader {
+/* Barcode scanner (ZXing + digital zoom) */
+.camera-scan-wrap {
+  margin-bottom: 0.75rem;
+}
+.scan-stage {
+  position: relative;
   width: 100%;
-  min-height: 220px;
+  height: 280px;
   background: #000;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
 }
-.barcode-reader video {
-  width: 100% !important;
-  border-radius: 10px;
+.scan-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
 }
-.barcode-reader img {
-  max-width: 100%;
+.scan-reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 88%;
+  height: 34%;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(0, 196, 122, 0.95);
+  border-radius: 10px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.scan-canvas {
+  display: none;
 }
 #camera-scan-wrap .ghost-btn {
   margin: 0.35rem;
@@ -1575,7 +1593,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  padding: 0 0.35rem;
+  padding: 0.35rem;
   align-items: center;
 }
 .scan-actions .ghost-btn,
@@ -1586,7 +1604,4 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-.camera-scan-wrap {
-  margin-bottom: 0.75rem;
 }

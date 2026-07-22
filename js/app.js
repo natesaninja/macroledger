@@ -50,6 +50,13 @@ import {
 } from "./onboarding.js";
 import { parseFoodUtterance } from "./nlp-log.js";
 import { proposeAdaptiveTargets, applyAdaptiveProposal } from "./adaptive.js";
+import {
+  startScanner,
+  stopScanner,
+  flipScanner,
+  decodeBarcodeFromFile,
+  cameraHelp,
+} from "./barcode-scan.js";
 
 const MEALS = [
   { id: "breakfast", label: "Breakfast", icon: "🌅" },
@@ -65,12 +72,7 @@ let selectedFood = null;
 let pendingOff = null;
 let modalMeal = "breakfast";
 let deferredInstall = null;
-let cameraStream = null;
-let cameraTimer = null;
-let html5QrCode = null;
 let scanBusy = false;
-let availableCameras = []; // { id, label }
-let currentCameraIndex = -1;
 let reviewDrafts = [];
 let onboardStep = 0;
 let onboardDraft = {
@@ -708,387 +710,60 @@ async function onBarcodeDetected(code) {
   }
 }
 
-function isIosDevice() {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
 
-function cameraErrorHelp(err) {
-  const name = err?.name || "";
-  const msg = (err?.message || String(err || "")).toLowerCase();
-  if (name === "NotAllowedError" || msg.includes("permission") || msg.includes("denied") || msg.includes("not allowed")) {
-    if (isIosDevice()) {
-      return (
-        "iPhone blocked the camera for this site. Fix: Settings → Safari → Camera → Allow. " +
-        "Also Settings → Privacy & Security → Camera → Safari ON. " +
-        "Then force-close Safari and reopen MacroLedger. Or use “Photo of barcode” below."
-      );
-    }
-    return "Camera permission denied. Allow camera for this site, then try again. Or use Photo of barcode.";
-  }
-  if (name === "NotFoundError" || msg.includes("not found") || msg.includes("no device")) {
-    return "No camera found. Use “Photo of barcode” or type the numbers under the barcode.";
-  }
-  if (name === "NotReadableError" || msg.includes("in use") || msg.includes("track")) {
-    return "Camera is busy (another app). Close Camera/Snapchat/etc., then try again.";
-  }
-  if (msg.includes("secure") || !window.isSecureContext) {
-    return "Camera only works on HTTPS. Open https://natesaninja.github.io/macroledger/ in Safari.";
-  }
-  return `Camera error (${name || "unknown"}). Use “Photo of barcode” or type the UPC.`;
-}
-
-/** Ask iOS for permission — prefer rear camera so labels enumerate correctly. */
-async function primeCameraPermission() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false,
-    });
-    stream.getTracks().forEach((t) => t.stop());
-  } catch {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: false,
-    });
-    stream.getTracks().forEach((t) => t.stop());
-  }
-}
-
-/** Rank cameras: back/environment first, never prefer front. */
-function rankCameras(cameras) {
-  if (!cameras?.length) return [];
-  return cameras
-    .map((c, index) => {
-      const label = (c.label || "").toLowerCase();
-      let score = index; // later devices often back camera on iOS
-      if (/back|rear|environment|wide|ultra|triple|dual|tele/i.test(label)) score += 100;
-      if (/front|face|user|true.?depth|continuity/i.test(label)) score -= 100;
-      return { id: c.id, label: c.label || `Camera ${index + 1}`, score, index };
-    })
-    .sort((a, b) => b.score - a.score);
-}
-
-function productBarcodeFormats() {
-  // Focus on grocery UPC/EAN — not QR (html5-qrcode defaults hurt 1D reads)
-  const F = window.Html5QrcodeSupportedFormats;
-  if (!F) return undefined;
-  return [
-    F.EAN_13,
-    F.EAN_8,
-    F.UPC_A,
-    F.UPC_E,
-    F.CODE_128,
-    F.CODE_39,
-    F.ITF,
-    F.CODABAR,
-  ].filter((x) => x != null);
-}
-
-function scannerConfig() {
-  const formatsToSupport = productBarcodeFormats();
+function scanUi() {
   return {
-    fps: 12,
-    // Wide short box = better for horizontal product barcodes
-    qrbox: (viewW, viewH) => {
-      const w = Math.floor(Math.min(viewW * 0.95, 360));
-      const h = Math.floor(Math.min(120, viewH * 0.28));
-      return { width: Math.max(240, w), height: Math.max(80, h) };
-    },
-    aspectRatio: 1.777,
-    disableFlip: false,
-    // Native BarcodeDetector on iOS is often flaky for 1D — off on iPhone
-    experimentalFeatures: {
-      useBarCodeDetectorIfSupported: !isIosDevice(),
-    },
-    videoConstraints: {
-      facingMode: { ideal: "environment" },
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      // ignored on some iOS versions; harmless when unsupported
-      advanced: [{ focusMode: "continuous" }],
-    },
-    ...(formatsToSupport ? { formatsToSupport } : {}),
+    video: document.getElementById("camera-video"),
+    canvas: document.getElementById("scan-canvas"),
+    onCode: (code) => onBarcodeDetected(code),
+    onStatus: (msg, kind) => setBarcodeStatus(msg, kind || ""),
   };
 }
 
-async function listCamerasForScan() {
-  let cameras = [];
-  try {
-    cameras = (await Html5Qrcode.getCameras()) || [];
-  } catch {
-    cameras = [];
-  }
-  if (!cameras.length) {
-    try {
-      const all = await navigator.mediaDevices.enumerateDevices();
-      cameras = all
-        .filter((d) => d.kind === "videoinput")
-        .map((d) => ({ id: d.deviceId, label: d.label || "" }));
-    } catch {
-      /* ok */
-    }
-  }
-  availableCameras = rankCameras(cameras);
-  return availableCameras;
-}
-
 async function startCamera() {
-  if (!window.isSecureContext) {
-    setBarcodeStatus(
-      "Camera needs HTTPS. Open https://natesaninja.github.io/macroledger/ in Safari.",
-      "error"
-    );
-    return;
-  }
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setBarcodeStatus(
-      "This browser can’t open the camera. On iPhone use Safari. Or use Photo of barcode.",
-      "error"
-    );
-    return;
-  }
-
-  const ua = navigator.userAgent || "";
-  if (isIosDevice() && /CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua)) {
-    setBarcodeStatus(
-      "On iPhone, open MacroLedger in Safari (Chrome can’t use the camera). Or use Photo of barcode.",
-      "error"
-    );
-    return;
-  }
-
   document.getElementById("camera-scan-wrap").hidden = false;
-  setBarcodeStatus("Starting rear camera… tap Allow if asked.", "");
-
+  setBarcodeStatus("Starting rear camera with zoom…", "");
   try {
-    await primeCameraPermission();
-  } catch (err) {
-    console.warn("prime permission failed", err);
-    setBarcodeStatus(cameraErrorHelp(err), "error");
-    document.getElementById("camera-scan-wrap").hidden = false;
-    return;
-  }
-
-  await startHtml5QrcodeScanner();
-}
-
-async function startHtml5QrcodeScanner(forceCameraId = null) {
-  const readerEl = document.getElementById("barcode-reader");
-  readerEl.hidden = false;
-  document.getElementById("camera-video").hidden = true;
-
-  if (typeof Html5Qrcode === "undefined") {
-    setBarcodeStatus("Loading scanner…", "");
-    await loadHtml5Qrcode();
-    if (typeof Html5Qrcode === "undefined") {
-      setBarcodeStatus("Could not load scanner library. Use Photo of barcode or type the UPC.", "error");
-      return;
-    }
-  }
-
-  try {
-    if (html5QrCode) {
-      try {
-        await html5QrCode.stop();
-      } catch {
-        /* ok */
-      }
-      try {
-        html5QrCode.clear();
-      } catch {
-        /* ok */
-      }
-    }
-
-    const formatsToSupport = productBarcodeFormats();
-    html5QrCode = new Html5Qrcode("barcode-reader", {
-      verbose: false,
-      ...(formatsToSupport ? { formatsToSupport } : {}),
-    });
-
-    const cams = await listCamerasForScan();
-    const config = scannerConfig();
-    const onSuccess = (decodedText) => onBarcodeDetected(decodedText);
-    const onFail = () => {};
-
-    // Build ordered camera attempts: forced id → ranked device ids → environment facingMode
-    const attempts = [];
-    if (forceCameraId) attempts.push(forceCameraId);
-    for (const c of cams) {
-      if (!forceCameraId || c.id !== forceCameraId) attempts.push(c.id);
-    }
-    // Only use facingMode if we have no device ids
-    if (!attempts.length) {
-      attempts.push({ facingMode: { ideal: "environment" } });
-      attempts.push({ facingMode: "environment" });
-    }
-
-    // Default to best-ranked (back) camera index
-    if (!forceCameraId && cams.length) {
-      currentCameraIndex = 0;
-    }
-
-    let lastErr = null;
-    for (const cam of attempts) {
-      try {
-        // When using deviceId string, drop facingMode from videoConstraints so it can't force front
-        const cfg = { ...config };
-        if (typeof cam === "string") {
-          cfg.videoConstraints = {
-            deviceId: { exact: cam },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          };
-        }
-        await html5QrCode.start(cam, cfg, onSuccess, onFail);
-        const label =
-          typeof cam === "string"
-            ? cams.find((c) => c.id === cam)?.label || "rear camera"
-            : "rear camera";
-        const isFront = /front|face|user/i.test(label);
-        setBarcodeStatus(
-          isFront
-            ? "Front camera on — tap Flip camera for the back lens. Hold barcode flat in the box."
-            : "Back camera on — fill the wide box with the barcode, hold steady 1–2s.",
-          isFront ? "error" : "ok"
-        );
-        if (typeof cam === "string") {
-          currentCameraIndex = Math.max(
-            0,
-            cams.findIndex((c) => c.id === cam)
-          );
-        }
-        return;
-      } catch (e) {
-        lastErr = e;
-        try {
-          await html5QrCode.stop();
-        } catch {
-          /* ok */
-        }
-      }
-    }
-    throw lastErr || new Error("Could not start any camera");
+    await startScanner(scanUi());
   } catch (err) {
     console.error(err);
-    setBarcodeStatus(cameraErrorHelp(err), "error");
+    setBarcodeStatus(cameraHelp(err), "error");
   }
 }
 
 async function flipCamera() {
-  if (!availableCameras.length) {
-    await listCamerasForScan();
+  try {
+    await flipScanner(scanUi());
+  } catch (err) {
+    setBarcodeStatus(cameraHelp(err), "error");
   }
-  if (availableCameras.length < 2) {
-    toast("Only one camera available");
-    // still try opposite facingMode
-    await startHtml5QrcodeScanner(
-      currentCameraIndex >= 0 && availableCameras[currentCameraIndex]
-        ? availableCameras[(currentCameraIndex + 1) % Math.max(availableCameras.length, 1)]?.id
-        : null
-    );
-    return;
-  }
-  currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
-  const next = availableCameras[currentCameraIndex];
-  setBarcodeStatus(`Switching to ${next.label || "camera"}…`, "");
-  await startHtml5QrcodeScanner(next.id);
 }
 
-function loadHtml5Qrcode() {
-  return new Promise((resolve) => {
-    if (typeof Html5Qrcode !== "undefined") {
-      resolve();
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
-    s.onload = () => resolve();
-    s.onerror = () => resolve();
-    document.head.appendChild(s);
-  });
-}
-
-/** Decode barcode from a still photo (often more reliable than live on iPhone). */
 async function scanBarcodeFromFile(file) {
   if (!file) return;
   setBarcodeStatus("Reading barcode from photo…", "");
   try {
-    if (typeof Html5Qrcode === "undefined") await loadHtml5Qrcode();
-    if (typeof Html5Qrcode === "undefined") {
-      setBarcodeStatus("Scanner library missing. Type the barcode numbers.", "error");
-      return;
-    }
-    const formatsToSupport = productBarcodeFormats();
-    const tempId = "barcode-file-reader";
-    let el = document.getElementById(tempId);
-    if (!el) {
-      el = document.createElement("div");
-      el.id = tempId;
-      el.style.display = "none";
-      document.body.appendChild(el);
-    }
-    const scanner = new Html5Qrcode(tempId, {
-      verbose: false,
-      ...(formatsToSupport ? { formatsToSupport } : {}),
-    });
-    const decoded = await scanner.scanFile(file, /* showImage */ false);
-    try {
-      scanner.clear();
-    } catch {
-      /* ok */
-    }
-    await onBarcodeDetected(decoded);
+    const code = await decodeBarcodeFromFile(file);
+    if (code) await onBarcodeDetected(code);
+    else setBarcodeStatus("No barcode found in photo. Try closer / better light, or type the UPC.", "error");
   } catch (err) {
     console.error(err);
     setBarcodeStatus(
-      "Couldn’t read barcode in that photo. Good light, fill the frame with the bars, or type the numbers under the code.",
+      "Could not read barcode in photo. Type the numbers under the code (that always works).",
       "error"
     );
   }
 }
 
-function stopCameraNativeOnly() {
-  if (cameraTimer) clearInterval(cameraTimer);
-  cameraTimer = null;
-  if (cameraStream) {
-    cameraStream.getTracks().forEach((t) => t.stop());
-    cameraStream = null;
-  }
+async function stopCamera() {
+  await stopScanner();
   const v = document.getElementById("camera-video");
   if (v) {
     v.srcObject = null;
-    v.hidden = true;
-  }
-}
-
-async function stopCamera() {
-  stopCameraNativeOnly();
-  if (html5QrCode) {
-    try {
-      const state = html5QrCode.getState && html5QrCode.getState();
-      // 2 = SCANNING in html5-qrcode
-      if (state === 2 || state === undefined) {
-        await html5QrCode.stop();
-      }
-    } catch {
-      /* already stopped */
-    }
-    try {
-      html5QrCode.clear();
-    } catch {
-      /* ok */
-    }
-    html5QrCode = null;
+    v.style.transform = "";
   }
   const wrap = document.getElementById("camera-scan-wrap");
   if (wrap) wrap.hidden = true;
-  const reader = document.getElementById("barcode-reader");
-  if (reader) {
-    reader.innerHTML = "";
-    reader.hidden = false;
-  }
 }
 
 // ---- progress / foods / goals ----
@@ -2018,7 +1693,7 @@ async function boot() {
   // Force fresh app shell on iPhone (kills old MacroLedger caches)
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=6", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=7", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -2057,7 +1732,7 @@ async function boot() {
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k !== "macroledger-v6-wh-sheetz")
+          .filter((k) => k !== "macroledger-v7-zxing")
           .map((k) => caches.delete(k))
       );
     } catch {

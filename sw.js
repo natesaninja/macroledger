@@ -1,5 +1,5 @@
 ﻿/* MacroLedger service worker — network-first so iPhone gets updates */
-const CACHE = "macroledger-v6-wh-sheetz";
+const CACHE = "macroledger-v7-zxing";
 const ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const ASSETS = [
   "./js/adaptive.js",
   "./js/nlp-log.js",
   "./js/onboarding.js",
+  "./js/barcode-scan.js",
   "./js/app.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
