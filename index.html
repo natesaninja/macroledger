@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=9b" />
+  <link rel="manifest" href="manifest.webmanifest?v=9cc" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=9b" />
+  <link rel="stylesheet" href="css/app.css?v=9cc" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -79,6 +79,9 @@
           <div class="brand-sub" id="greeting">Offline diary</div>
         </div>
       </div>
+      <button type="button" class="theme-toggle" id="theme-toggle" title="Switch light / dark" aria-label="Switch light and dark theme">
+        <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true">🌙</span>
+      </button>
       <nav class="nav-tabs" role="tablist">
         <button class="nav-tab active" data-view="diary" type="button">Diary</button>
         <button class="nav-tab" data-view="progress" type="button">Progress</button>
@@ -463,6 +466,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=9b"></script>
+  <script type="module" src="js/app.js?v=9cc"></script>
 </body>
 </html>

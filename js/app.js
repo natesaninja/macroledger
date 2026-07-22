@@ -1,5 +1,5 @@
 /**
- * MacroLedger PWA ó offline-first UI
+ * MacroLedger PWA ÔøΩ offline-first UI
  */
 import {
   ensureSeeded,
@@ -77,7 +77,7 @@ const UI_THEMES = [
   {
     id: "light",
     name: "Light",
-    desc: "Default ∑ bright & clean",
+    desc: "Default ÔøΩ bright & clean",
     swatches: ["#f4f6f9", "#0a9f68", "#3b6fd9"],
   },
   {
@@ -113,7 +113,30 @@ function applyTheme(themeId) {
   const meta = document.querySelector('meta[name="theme-color"]');
   const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
   if (meta && accent) meta.setAttribute("content", accent);
+  updateThemeToggleIcon(id);
   return id;
+}
+
+function updateThemeToggleIcon(themeId) {
+  const icon = document.getElementById("theme-toggle-icon");
+  const btn = document.getElementById("theme-toggle");
+  if (!icon || !btn) return;
+  // Light mode ‚Üí show moon (switch to dark). Dark-ish themes ‚Üí show sun.
+  const isLight = themeId === "light";
+  icon.textContent = isLight ? "üåô" : "‚òÄÔ∏è";
+  btn.title = isLight ? "Switch to dark mode" : "Switch to light mode";
+  btn.setAttribute("aria-label", btn.title);
+}
+
+async function toggleLightDark() {
+  const s = await getSettings();
+  const cur = s.ui_theme || "light";
+  // Flip between light and midnight; other themes (ocean/sunset) go to light
+  const next = cur === "light" ? "midnight" : "light";
+  applyTheme(next);
+  renderThemePicker(next);
+  await setSettings({ ui_theme: next });
+  toast(next === "light" ? "Light mode" : "Dark mode");
 }
 
 function renderThemePicker(activeId) {
@@ -287,7 +310,7 @@ async function loadDay() {
 
 function renderDay(d) {
   document.getElementById("date-label").textContent = formatDateLabel(currentDate);
-  document.getElementById("greeting").textContent = `${d.user_name}'s diary ∑ on device`;
+  document.getElementById("greeting").textContent = `${d.user_name}'s diary ÔøΩ on device`;
 
   const rem = d.remaining.calories;
   const over = rem < 0;
@@ -369,14 +392,14 @@ async function renderQuickRail(mode) {
   const rail = document.getElementById("quick-rail");
   const foods = mode === "favs" ? await listFavorites() : await listRecents(12);
   if (!foods.length) {
-    rail.innerHTML = `<div class="empty-state" style="padding:0.25rem 0">No ${mode === "favs" ? "favorites" : "recents"} yet ó log foods to build this list.</div>`;
+    rail.innerHTML = `<div class="empty-state" style="padding:0.25rem 0">No ${mode === "favs" ? "favorites" : "recents"} yet ÔøΩ log foods to build this list.</div>`;
     return;
   }
   rail.innerHTML = foods
     .map(
       (f) => `<button type="button" class="quick-pill" data-id="${f.id}">
       <div class="qp-name">${escapeHtml(f.name)}</div>
-      <div class="qp-cal">${formatNum(f.calories)} cal ∑ tap to add</div>
+      <div class="qp-cal">${formatNum(f.calories)} cal ÔøΩ tap to add</div>
     </button>`
     )
     .join("");
@@ -429,13 +452,13 @@ function renderBurn(d) {
   body.innerHTML = `
     <div class="burn-stats">
       <div class="burn-stat"><span class="bv">${formatNum(bp.burn_to_hit_goal)}</span><span class="bl">cal to burn</span></div>
-      <div class="burn-stat"><span class="bv">${bp.walk_minutes_to_hit_goal != null ? bp.walk_minutes_to_hit_goal + "m" : "ó"}</span><span class="bl">walk est.</span></div>
-      <div class="burn-stat"><span class="bv">${bp.tdee != null ? formatNum(bp.tdee) : "ó"}</span><span class="bl">TDEE</span></div>
+      <div class="burn-stat"><span class="bv">${bp.walk_minutes_to_hit_goal != null ? bp.walk_minutes_to_hit_goal + "m" : "ÔøΩ"}</span><span class="bl">walk est.</span></div>
+      <div class="burn-stat"><span class="bv">${bp.tdee != null ? formatNum(bp.tdee) : "ÔøΩ"}</span><span class="bl">TDEE</span></div>
     </div>
     <p class="burn-msg ${bp.burn_to_hit_goal <= 0 ? "ok" : ""}">${escapeHtml(bp.message)}</p>
     ${
       meta
-        ? `<p class="burn-msg" style="margin-top:0.35rem">Plan ~${formatNum(meta.target_calories)} cal ∑ ${MacroLedgers(
+        ? `<p class="burn-msg" style="margin-top:0.35rem">Plan ~${formatNum(meta.target_calories)} cal ÔøΩ ${MacroLedgers(
             meta.suggested_macros.protein,
             meta.suggested_macros.carbs,
             meta.suggested_macros.fat
@@ -479,7 +502,7 @@ function renderMeals(d) {
               ? `<span class="flag-uncertain">? review</span>`
               : ""
           }${e.source && e.source !== "manual" ? `<span class="badge">${escapeHtml(e.source)}</span>` : ""}</div>
-          <div class="entry-meta">${formatNum(e.servings, 2)} ◊ ${escapeHtml(e.serving_size)}</div>
+          <div class="entry-meta">${formatNum(e.servings, 2)} ÔøΩ ${escapeHtml(e.serving_size)}</div>
           ${MacroLedgers(e.protein, e.carbs, e.fat, { calories: e.calories })}
         </div>
         <div class="entry-cals">${formatNum(e.calories)}</div>
@@ -584,7 +607,7 @@ function renderExercise(d) {
     <div class="entry">
       <div>
         <div class="entry-name">${escapeHtml(e.name)}</div>
-        <div class="entry-meta">${e.duration_min ? formatNum(e.duration_min) + " min" : "ó"}</div>
+        <div class="entry-meta">${e.duration_min ? formatNum(e.duration_min) + " min" : "ÔøΩ"}</div>
       </div>
       <div class="entry-cals">+${formatNum(e.calories)}</div>
       <div class="entry-actions">
@@ -685,11 +708,11 @@ async function lookupBarcode(raw) {
     return;
   }
   if (!navigator.onLine) {
-    status.textContent = "Offline ó barcode only works for foods already saved on this device";
+    status.textContent = "Offline ÔøΩ barcode only works for foods already saved on this device";
     status.className = "barcode-status error";
     return;
   }
-  status.textContent = "Looking up onlineÖ";
+  status.textContent = "Looking up onlineÔøΩ";
   status.className = "barcode-status";
   try {
     const res = await fetch(
@@ -732,7 +755,7 @@ async function lookupBarcode(raw) {
     selectedFood = null;
     pendingOff = food;
     showBarcodeResult(food, "openfoodfacts");
-    status.textContent = "Found online ó will save when you add";
+    status.textContent = "Found online ÔøΩ will save when you add";
     status.className = "barcode-status ok";
   } catch {
     status.textContent = "Lookup failed (need internet)";
@@ -773,7 +796,7 @@ async function onBarcodeDetected(code) {
   try {
     await stopCamera();
     document.getElementById("barcode-input").value = digits;
-    setBarcodeStatus(`Scanned ${digits} ó looking upÖ`, "ok");
+    setBarcodeStatus(`Scanned ${digits} ÔøΩ looking upÔøΩ`, "ok");
     toast("Barcode scanned");
     await lookupBarcode(digits);
   } finally {
@@ -793,7 +816,7 @@ function scanUi() {
 
 async function startCamera() {
   document.getElementById("camera-scan-wrap").hidden = false;
-  setBarcodeStatus("Starting rear camera with zoomÖ", "");
+  setBarcodeStatus("Starting rear camera with zoomÔøΩ", "");
   try {
     await startScanner(scanUi());
   } catch (err) {
@@ -812,7 +835,7 @@ async function flipCamera() {
 
 async function scanBarcodeFromFile(file) {
   if (!file) return;
-  setBarcodeStatus("Reading barcode from photoÖ", "");
+  setBarcodeStatus("Reading barcode from photoÔøΩ", "");
   try {
     const code = await decodeBarcodeFromFile(file);
     if (code) await onBarcodeDetected(code);
@@ -877,7 +900,7 @@ async function loadProgress() {
         (w) => `<div class="weight-row">
         <span class="w-date">${w.log_date}</span>
         <span class="w-val">${formatNum(w.weight_lb, 1)} lb</span>
-        <button type="button" data-id="${w.id}">◊</button>
+        <button type="button" data-id="${w.id}">ÔøΩ</button>
       </div>`
       )
       .join("");
@@ -936,7 +959,7 @@ function renderRecipeItems() {
       (i, idx) =>
         `<div class="entry"><div><div class="entry-name">${escapeHtml(i.food_name)}</div>
         ${MacroLedgers(i.protein, i.carbs, i.fat, { calories: i.calories })}</div>
-        <button type="button" class="ghost-btn" data-i="${idx}">◊</button></div>`
+        <button type="button" class="ghost-btn" data-i="${idx}">ÔøΩ</button></div>`
     )
     .join("");
   box.querySelectorAll("button").forEach((b) =>
@@ -959,11 +982,11 @@ async function loadMealsView() {
       (m) => `<div class="food-row">
       <div>
         <div class="fname">${escapeHtml(m.name)} ${m.is_recipe ? '<span class="badge">Recipe</span>' : ""}</div>
-        <div class="fmeta">${(m.items || []).length} ingredients ∑ ${formatNum(m.totals?.calories || 0)} cal</div>
+        <div class="fmeta">${(m.items || []).length} ingredients ÔøΩ ${formatNum(m.totals?.calories || 0)} cal</div>
       </div>
       <div>
         <button type="button" class="primary-btn log-meal" data-id="${m.id}" style="padding:0.35rem 0.75rem;font-size:0.8rem">Log</button>
-        <button type="button" class="ghost-btn del-meal" data-id="${m.id}" style="padding:0.35rem 0.5rem">◊</button>
+        <button type="button" class="ghost-btn del-meal" data-id="${m.id}" style="padding:0.35rem 0.5rem">ÔøΩ</button>
       </div>
     </div>`
     )
@@ -1142,7 +1165,7 @@ function showOnboardStep() {
       })
     );
   } else if (step === "review") {
-    el.innerHTML = `<h2>Your plan</h2><p class="hint">CalculatingÖ</p>`;
+    el.innerHTML = `<h2>Your plan</h2><p class="hint">CalculatingÔøΩ</p>`;
     computeOnboardingSuggestion(onboardDraft).then((sug) => {
       if (!sug.ok) {
         el.innerHTML = `<h2>Your plan</h2><p class="hint">${escapeHtml(sug.error)}</p>`;
@@ -1202,7 +1225,7 @@ function setupOnboarding() {
     saveProfileBackup(s);
     scheduleFullBackup(exportAllJson);
     document.getElementById("onboard").hidden = true;
-    toast("You're set ó profile is saved on this phone");
+    toast("You're set ÔøΩ profile is saved on this phone");
     loadDay();
   };
 }
@@ -1228,7 +1251,7 @@ function renderReviewList() {
           <span>${escapeHtml(d.food_name)} ${low ? '<span class="flag-uncertain">? ' + Math.round(d.confidence * 100) + '%</span>' : ""}</span>
           <button type="button" class="ghost-btn rev-del" data-i="${i}" style="padding:2px 8px">Remove</button>
         </div>
-        <div class="entry-meta">${escapeHtml(d.serving_size || "")} ∑ ${formatNum(d.calories)} cal</div>
+        <div class="entry-meta">${escapeHtml(d.serving_size || "")} ÔøΩ ${formatNum(d.calories)} cal</div>
         ${MacroLedgers(d.protein, d.carbs, d.fat)}
         <label>Servings <input type="number" class="rev-serv" data-i="${i}" min="0.1" step="0.25" value="${d.servings}" /></label>
       </div>`;
@@ -1295,7 +1318,7 @@ function setup() {
     const meal = guessMealSlot();
     document.getElementById("review-meal").value = meal;
     const drafts = await parseFoodUtterance(text, meal);
-    if (!drafts.length) return toast("Could not parse ó try simpler phrases");
+    if (!drafts.length) return toast("Could not parse ÔøΩ try simpler phrases");
     document.getElementById("nlp-modal").hidden = true;
     openReview(drafts);
   };
@@ -1309,7 +1332,7 @@ function setup() {
     };
     rec.onerror = () => toast("Mic error");
     rec.start();
-    toast("ListeningÖ");
+    toast("ListeningÔøΩ");
   };
   document.getElementById("close-review").onclick = document.getElementById(
     "review-discard"
@@ -1530,7 +1553,7 @@ function setup() {
     const line = document.getElementById("ex-estimate-line");
     if (!w) line.innerHTML = "Set weight in Goals to estimate burn.";
     else if (est.calories != null)
-      line.innerHTML = `At <strong>${w} lb</strong> ò <strong>${est.calories} cal</strong> (MET ${est.met})`;
+      line.innerHTML = `At <strong>${w} lb</strong> ÔøΩ <strong>${est.calories} cal</strong> (MET ${est.met})`;
     return est;
   }
   document.getElementById("ex-estimate-btn").onclick = async () => {
@@ -1614,7 +1637,7 @@ function setup() {
     document.getElementById("set-carbs").value = meta.suggested_macros.carbs;
     document.getElementById("set-fat").value = meta.suggested_macros.fat;
     await loadGoals();
-    toast("Suggested goals filled ó Save goals");
+    toast("Suggested goals filled ÔøΩ Save goals");
   };
   document.getElementById("apply-adaptive-btn").onclick = async () => {
     const prop = await proposeAdaptiveTargets();
@@ -1673,7 +1696,7 @@ function setup() {
     toast("CSV exported");
   };
 
-  // Install PWA ó iOS Safari is primary (no beforeinstallprompt on iOS)
+  // Install PWA ÔøΩ iOS Safari is primary (no beforeinstallprompt on iOS)
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
@@ -1696,7 +1719,7 @@ function setup() {
   });
 
   window.addEventListener("beforeinstallprompt", (e) => {
-    // Android/desktop Chrome only ó still supported, not our focus
+    // Android/desktop Chrome only ÔøΩ still supported, not our focus
     e.preventDefault();
     deferredInstall = e;
     if (!isIos && !localStorage.getItem("ct-install-dismiss") && !isStandalone) {
@@ -1732,7 +1755,7 @@ function setup() {
   }
   if (isStandalone) {
     document.getElementById("install-banner").classList.remove("show");
-    document.getElementById("storage-label").textContent = "Home Screen app ∑ on device";
+    document.getElementById("storage-label").textContent = "Home Screen app ÔøΩ on device";
   }
 
   window.addEventListener("online", updateOnline);
@@ -1792,6 +1815,8 @@ async function tryRestoreUserData() {
 // ---- boot ----
 async function boot() {
   setup();
+  const themeBtn = document.getElementById("theme-toggle");
+  if (themeBtn) themeBtn.addEventListener("click", () => toggleLightDark());
 
   // Recover data BEFORE seed/onboarding so updates don't wipe you
   await tryRestoreUserData();
@@ -1824,10 +1849,10 @@ async function boot() {
 
   await loadDay();
 
-  // Quiet SW updates ó do NOT tell users to delete the Home Screen icon
+  // Quiet SW updates ÔøΩ do NOT tell users to delete the Home Screen icon
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=9b", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=9c", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -1851,7 +1876,7 @@ async function boot() {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== "macroledger-v9b-light").map((k) => caches.delete(k))
+        keys.filter((k) => k !== "macroledger-v9c-toggle").map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */
