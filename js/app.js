@@ -2001,7 +2001,8 @@ function setup() {
 async function boot() {
   setup();
   await ensureSeeded(SEED_FOODS);
-  const addedRestaurants = await ensureRestaurantFoods(RESTAURANT_FOODS, "eastcoast_v1");
+  // Version key must bump when RESTAURANT_FOODS grows so existing phones get new chains
+  const addedRestaurants = await ensureRestaurantFoods(RESTAURANT_FOODS, "eastcoast_v2");
   if (addedRestaurants > 0) {
     console.log(`Added ${addedRestaurants} restaurant foods`);
   }
@@ -2017,7 +2018,7 @@ async function boot() {
   // Force fresh app shell on iPhone (kills old MacroLedger caches)
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=5", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=6", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -2056,7 +2057,7 @@ async function boot() {
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k !== "macroledger-v5-restaurants")
+          .filter((k) => k !== "macroledger-v6-wh-sheetz")
           .map((k) => caches.delete(k))
       );
     } catch {
