@@ -1,0 +1,444 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#00c47a" />
+  <meta name="description" content="Offline calorie and macro tracker" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MacroLedger" />
+  <link rel="manifest" href="manifest.webmanifest?v=1" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/app.css?v=1" />
+  <title>MacroLedger</title>
+</head>
+<body>
+  <!-- Onboarding (Phase 1) -->
+  <div class="onboard-overlay" id="onboard" hidden>
+    <div class="onboard-card">
+      <div class="onboard-progress"><i id="onboard-bar"></i></div>
+      <div id="onboard-step"></div>
+      <div class="onboard-nav">
+        <button type="button" class="ghost-btn" id="onboard-back" hidden>Back</button>
+        <button type="button" class="primary-btn" id="onboard-next">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app safe-bottom">
+    <div class="status-bar">
+      <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
+      <span id="streak-chip" class="streak-chip" title="Logging streak">🔥 0</span>
+      <span id="storage-label">On this device</span>
+      <span id="app-version" class="app-version">MacroLedger v2 · barcode ON</span>
+    </div>
+
+    <div class="install-banner" id="install-banner">
+      <div class="install-banner-text">
+        <strong id="install-title">Install on iPhone</strong>
+        <div class="hint" id="install-hint" style="margin:0.2rem 0 0">
+          Safari → Share → <strong>Add to Home Screen</strong> for an app icon &amp; offline use.
+        </div>
+      </div>
+      <div class="install-banner-actions">
+        <button type="button" class="primary-btn" id="install-btn">Show steps</button>
+        <button type="button" class="ghost-btn" id="install-dismiss">Later</button>
+      </div>
+    </div>
+
+    <!-- iOS install coach sheet -->
+    <div class="modal-backdrop" id="ios-install-modal" hidden>
+      <div class="modal modal-sm" role="dialog" aria-labelledby="ios-install-title">
+        <div class="modal-header">
+          <h2 id="ios-install-title">Add to Home Screen</h2>
+          <button type="button" class="icon-btn" id="close-ios-install" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body">
+          <ol class="ios-steps">
+            <li>Open this page in <strong>Safari</strong> (not Chrome if the menu looks different).</li>
+            <li>Tap the <strong>Share</strong> button <span class="ios-share-icon" aria-hidden="true">⬆</span> at the bottom (or top) of Safari.</li>
+            <li>Scroll the sheet and tap <strong>Add to Home Screen</strong>.</li>
+            <li>Tap <strong>Add</strong>, then open the new <strong>MacroLedger</strong> icon.</li>
+          </ol>
+          <p class="hint">That’s the best iPhone path — no App Store needed. Your diary stays on this phone. Export backups under Progress.</p>
+          <button type="button" class="primary-btn full" id="ios-install-done">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">ML</span>
+        <div>
+          <div class="brand-name">MacroLedger</div>
+          <div class="brand-sub" id="greeting">Offline diary</div>
+        </div>
+      </div>
+      <nav class="nav-tabs" role="tablist">
+        <button class="nav-tab active" data-view="diary" type="button">Diary</button>
+        <button class="nav-tab" data-view="progress" type="button">Progress</button>
+        <button class="nav-tab" data-view="foods" type="button">Foods</button>
+        <button class="nav-tab" data-view="meals" type="button">Meals</button>
+        <button class="nav-tab" data-view="goals" type="button">Goals</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="view-diary" class="view active">
+        <div class="date-bar">
+          <button type="button" class="icon-btn" id="prev-day" aria-label="Previous day">‹</button>
+          <button type="button" class="date-label" id="date-label"></button>
+          <button type="button" class="icon-btn" id="next-day" aria-label="Next day">›</button>
+          <button type="button" class="ghost-btn" id="today-btn">Today</button>
+        </div>
+
+        <div class="summary-card">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-bg" cx="60" cy="60" r="52" />
+              <circle class="ring-fg" id="cal-ring" cx="60" cy="60" r="52" />
+            </svg>
+            <div class="ring-center">
+              <div class="ring-value" id="cal-remaining">—</div>
+              <div class="ring-label" id="cal-remaining-label">remaining</div>
+            </div>
+          </div>
+          <div class="summary-stats">
+            <div class="stat"><span class="stat-label">Goal</span><span class="stat-value" id="stat-goal">—</span></div>
+            <div class="stat"><span class="stat-label">Food</span><span class="stat-value" id="stat-food">—</span></div>
+            <div class="stat"><span class="stat-label">Exercise</span><span class="stat-value accent" id="stat-exercise">—</span></div>
+            <div class="stat highlight"><span class="stat-label">Remaining</span><span class="stat-value" id="stat-remaining">—</span></div>
+          </div>
+          <div class="macro-bars" id="macro-bars"></div>
+          <div class="density-row" id="density-row"></div>
+        </div>
+
+        <!-- One-tap logging strip -->
+        <div class="quick-log card-lite">
+          <div class="quick-log-title">Quick log</div>
+          <div class="quick-actions">
+            <button type="button" class="chip-btn" id="btn-scan-barcode">📷 Scan barcode</button>
+            <button type="button" class="chip-btn" id="btn-voice-log">🎤 Voice / text</button>
+            <button type="button" class="chip-btn" id="btn-show-recents">⏱ Recents</button>
+            <button type="button" class="chip-btn" id="btn-show-favs">★ Favorites</button>
+          </div>
+          <div class="quick-rail" id="quick-rail"></div>
+        </div>
+
+        <div class="burn-card" id="burn-card">
+          <div class="burn-header">
+            <span>🏃 Calories to burn</span>
+            <span class="burn-weight" id="burn-weight-label"></span>
+          </div>
+          <div class="burn-body" id="burn-body"></div>
+        </div>
+
+        <div class="toolbar-row">
+          <button type="button" class="ghost-btn" id="copy-yesterday-btn">📋 Copy yesterday</button>
+          <button type="button" class="ghost-btn" id="export-json-btn">⬇ Backup</button>
+        </div>
+
+        <div class="water-card">
+          <div class="water-header">
+            <span>💧 Water</span>
+            <span class="water-count" id="water-count">0 / 8</span>
+          </div>
+          <div class="water-glasses" id="water-glasses"></div>
+        </div>
+
+        <div class="meals" id="meals"></div>
+
+        <article class="meal-card">
+          <div class="meal-header">
+            <div class="meal-title"><span>🔥</span> Exercise</div>
+            <span class="meal-cal" id="exercise-total">0 cal burned</span>
+            <button type="button" class="add-meal-btn" id="add-exercise-btn">+</button>
+          </div>
+          <div class="meal-entries" id="exercise-entries"></div>
+        </article>
+      </section>
+
+      <section id="view-progress" class="view">
+        <h2 class="section-title">Progress</h2>
+        <div class="card">
+          <h3 class="card-title">Last 14 days</h3>
+          <div class="history-chart" id="history-chart"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Weight</h3>
+          <form id="weight-form" class="inline-form">
+            <label>Weight (lb)<input type="number" id="weight-input" step="0.1" min="1" required /></label>
+            <label>Date<input type="date" id="weight-date" /></label>
+            <button type="submit" class="primary-btn">Log weight</button>
+          </form>
+          <div class="weight-list" id="weight-list"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Backup &amp; restore</h3>
+          <p class="hint" style="margin-top:0">Your data is only on this device. Export a backup before switching phones.</p>
+          <div class="export-buttons">
+            <button type="button" class="ghost-btn" id="backup-btn">Export JSON backup</button>
+            <label class="ghost-btn export-link" style="cursor:pointer">
+              Restore backup
+              <input type="file" id="restore-input" accept="application/json,.json" hidden />
+            </label>
+            <button type="button" class="ghost-btn" id="export-csv-btn">Export diary CSV</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-meals" class="view">
+        <h2 class="section-title">Meals &amp; recipes</h2>
+        <div class="card">
+          <h3 class="card-title">Recipe builder</h3>
+          <p class="hint" style="margin-top:0">Add ingredients → auto nutrition → save as a one-tap meal.</p>
+          <form id="recipe-form" class="form-grid">
+            <label class="span-2">Recipe name *<input name="name" id="recipe-name" required placeholder="e.g. Protein bowl" /></label>
+            <label class="span-2">Search ingredient
+              <input type="search" id="recipe-food-search" placeholder="Chicken, rice…" />
+            </label>
+            <div class="span-2 search-results" id="recipe-search-results"></div>
+            <div class="span-2" id="recipe-items"></div>
+            <div class="span-2 metabolism-panel" id="recipe-totals">Totals appear here</div>
+            <div class="span-2 form-actions">
+              <button type="submit" class="primary-btn">Save recipe / meal</button>
+            </div>
+          </form>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Saved meals</h3>
+          <div id="saved-meals-list"></div>
+        </div>
+      </section>
+
+      <section id="view-foods" class="view">
+        <h2 class="section-title">Foods</h2>
+        <div class="card">
+          <div class="search-row">
+            <input type="search" id="food-db-search" placeholder="Search foods…" />
+          </div>
+          <div class="food-db-list" id="food-db-list"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Create custom food</h3>
+          <form id="custom-food-form" class="form-grid">
+            <label class="span-2">Name *<input name="name" required /></label>
+            <label>Brand<input name="brand" /></label>
+            <label>Serving<input name="serving_size" value="1 serving" /></label>
+            <label>Barcode<input name="barcode" inputmode="numeric" /></label>
+            <label>Calories<input name="calories" type="number" value="0" /></label>
+            <label>Protein (g)<input name="protein" type="number" step="0.1" value="0" /></label>
+            <label>Carbs (g)<input name="carbs" type="number" step="0.1" value="0" /></label>
+            <label>Fat (g)<input name="fat" type="number" step="0.1" value="0" /></label>
+            <label>Fiber (g)<input name="fiber" type="number" step="0.1" value="0" /></label>
+            <div class="span-2 form-actions">
+              <button type="submit" class="primary-btn">Save food</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="view-goals" class="view">
+        <h2 class="section-title">Goals &amp; profile</h2>
+        <div class="card">
+          <form id="goals-form" class="form-grid">
+            <label class="span-2">Display name<input name="user_name" id="set-user-name" /></label>
+            <label>Weight (lb) *<input name="body_weight_lb" id="set-weight" type="number" step="0.1" /></label>
+            <label>Height (in)<input name="height_in" id="set-height" type="number" step="0.5" /></label>
+            <label>Age<input name="age" id="set-age" type="number" /></label>
+            <label>Sex
+              <select name="sex" id="set-sex">
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </label>
+            <label>Activity
+              <select name="activity_level" id="set-activity">
+                <option value="sedentary">Sedentary</option>
+                <option value="light">Light</option>
+                <option value="moderate">Moderate</option>
+                <option value="active">Active</option>
+                <option value="extra">Very active</option>
+              </select>
+            </label>
+            <label>Goal
+              <select name="goal_type" id="set-goal-type">
+                <option value="lose">Lose weight</option>
+                <option value="maintain">Maintain</option>
+                <option value="gain">Gain weight</option>
+              </select>
+            </label>
+            <label>Protein g/lb<input name="protein_per_lb" id="set-protein-per-lb" type="number" step="0.05" value="0.8" /></label>
+            <div class="span-2 metabolism-panel" id="metabolism-panel"></div>
+            <label class="span-2">Adaptive targets
+              <select name="adaptive_enabled" id="set-adaptive">
+                <option value="1">On — suggest weekly adjustments</option>
+                <option value="0">Off</option>
+              </select>
+            </label>
+            <div class="span-2" id="adaptive-panel"></div>
+            <div class="span-2 form-actions">
+              <button type="button" class="ghost-btn" id="apply-suggested-btn">Apply suggested goals</button>
+              <button type="button" class="ghost-btn" id="apply-adaptive-btn">Apply adaptive</button>
+            </div>
+            <div class="span-2 form-actions">
+              <button type="button" class="ghost-btn" id="reset-onboarding-btn">Replay onboarding</button>
+            </div>
+            <h3 class="card-title span-2">Daily targets</h3>
+            <label>Calories<input name="calorie_goal" id="set-calorie" type="number" /></label>
+            <label>Protein (g)<input name="protein_goal" id="set-protein" type="number" /></label>
+            <label>Carbs (g)<input name="carbs_goal" id="set-carbs" type="number" /></label>
+            <label>Fat (g)<input name="fat_goal" id="set-fat" type="number" /></label>
+            <label>Fiber (g)<input name="fiber_goal" id="set-fiber" type="number" /></label>
+            <label>Water<input name="water_goal" id="set-water" type="number" /></label>
+            <div class="span-2 form-actions">
+              <button type="submit" class="primary-btn">Save goals</button>
+              <span class="save-hint" id="goals-saved" hidden>Saved ✓</span>
+            </div>
+          </form>
+          <p class="hint">All data is stored only in this browser / phone. Use Backup on Progress to move to a new device.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Add food modal -->
+  <div class="modal-backdrop" id="add-modal" hidden>
+    <div class="modal" role="dialog">
+      <div class="modal-header">
+        <h2>Add food</h2>
+        <button type="button" class="icon-btn" id="close-modal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="meal-pills" id="meal-pills">
+          <button type="button" class="pill active" data-meal="breakfast">Breakfast</button>
+          <button type="button" class="pill" data-meal="lunch">Lunch</button>
+          <button type="button" class="pill" data-meal="dinner">Dinner</button>
+          <button type="button" class="pill" data-meal="snacks">Snacks</button>
+        </div>
+        <div class="barcode-row">
+          <input type="text" id="barcode-input" class="search-input barcode-input" placeholder="Type barcode or scan below" inputmode="numeric" autocomplete="off" />
+          <button type="button" class="primary-btn" id="barcode-lookup-btn">Lookup</button>
+          <button type="button" class="ghost-btn" id="camera-scan-btn">📷 Scan</button>
+        </div>
+        <p class="barcode-hint">Camera works on this HTTPS app (iPhone Safari). Point at UPC/EAN — needs internet for new products.</p>
+        <div id="camera-scan-wrap" class="camera-scan-wrap" hidden>
+          <div id="barcode-reader" class="barcode-reader"></div>
+          <video id="camera-video" playsinline muted hidden></video>
+          <button type="button" class="ghost-btn" id="camera-stop-btn">Stop camera</button>
+        </div>
+        <p class="barcode-status" id="barcode-status" hidden></p>
+        <input type="search" id="food-search" class="search-input" placeholder="Search foods…" />
+        <div class="servings-row" id="servings-row" hidden>
+          <label>Servings<input type="number" id="servings-input" min="0.1" step="0.25" value="1" /></label>
+          <div class="preview-macros" id="preview-macros"></div>
+        </div>
+        <div class="search-results" id="search-results"></div>
+        <div class="modal-footer">
+          <button type="button" class="ghost-btn" id="quick-add-toggle">Quick add</button>
+          <button type="button" class="primary-btn" id="add-selected" disabled>Add</button>
+        </div>
+        <form id="quick-add-form" class="quick-add" hidden>
+          <label>Description<input name="food_name" required /></label>
+          <div class="form-grid tight">
+            <label>Calories *<input name="calories" type="number" required /></label>
+            <label>Protein<input name="protein" type="number" step="0.1" value="0" /></label>
+            <label>Carbs<input name="carbs" type="number" step="0.1" value="0" /></label>
+            <label>Fat<input name="fat" type="number" step="0.1" value="0" /></label>
+          </div>
+          <button type="submit" class="primary-btn full">Quick add</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="exercise-modal" hidden>
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Log exercise</h2>
+        <button type="button" class="icon-btn" id="close-exercise-modal">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="exercise-form" class="form-grid">
+          <label class="span-2">Activity *
+            <input name="name" id="ex-name" list="ex-list" required />
+            <datalist id="ex-list">
+              <option value="Walking"></option>
+              <option value="Walking (brisk)"></option>
+              <option value="Running"></option>
+              <option value="Cycling"></option>
+              <option value="Swimming"></option>
+              <option value="Weightlifting"></option>
+              <option value="HIIT"></option>
+              <option value="Yoga"></option>
+            </datalist>
+          </label>
+          <label>Minutes<input name="duration_min" id="ex-duration" type="number" value="30" /></label>
+          <label>Calories *<input name="calories" id="ex-calories" type="number" required /></label>
+          <div class="span-2 estimate-line" id="ex-estimate-line"></div>
+          <div class="span-2 form-actions">
+            <button type="button" class="ghost-btn" id="ex-estimate-btn">Estimate from weight</button>
+            <button type="submit" class="primary-btn">Add</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- NLP / AI review modal -->
+  <div class="modal-backdrop" id="review-modal" hidden>
+    <div class="modal" role="dialog" aria-labelledby="review-title">
+      <div class="modal-header">
+        <h2 id="review-title">Review before save</h2>
+        <button type="button" class="icon-btn" id="close-review">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0">⚠ Uncertain items are flagged. Edit servings or remove before saving.</p>
+        <label>Meal
+          <select id="review-meal">
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch" selected>Lunch</option>
+            <option value="dinner">Dinner</option>
+            <option value="snacks">Snacks</option>
+          </select>
+        </label>
+        <div id="review-list" class="review-list"></div>
+        <div class="modal-footer" style="margin-top:1rem">
+          <button type="button" class="ghost-btn" id="review-discard">Discard</button>
+          <button type="button" class="primary-btn" id="review-save">Save all ✓</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice / text log modal -->
+  <div class="modal-backdrop" id="nlp-modal" hidden>
+    <div class="modal modal-sm" role="dialog">
+      <div class="modal-header">
+        <h2>Voice / text log</h2>
+        <button type="button" class="icon-btn" id="close-nlp">×</button>
+      </div>
+      <div class="modal-body">
+        <label>What did you eat?
+          <textarea id="nlp-text" rows="3" placeholder='e.g. "grilled chicken with rice and olive oil"' style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:0.6rem;font:inherit"></textarea>
+        </label>
+        <div class="form-actions" style="margin-top:0.75rem">
+          <button type="button" class="ghost-btn" id="nlp-mic">🎤 Speak</button>
+          <button type="button" class="primary-btn" id="nlp-parse">Parse &amp; review</button>
+        </div>
+        <p class="hint">Works offline for known foods. Low-confidence matches require review.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+  <script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>
