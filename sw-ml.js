@@ -1,5 +1,5 @@
-﻿/* MacroLedger service worker */
-const CACHE = "macroledger-v11-fasting";
+/* MacroLedger service worker */
+const CACHE = "macroledger-v12-fix";
 const ASSETS = [
   "./",
   "./index.html",

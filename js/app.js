@@ -817,7 +817,6 @@ async function onBarcodeDetected(code) {
   }
 }
 
-
 function scanUi() {
   return {
     video: document.getElementById("camera-video"),
@@ -1794,7 +1793,6 @@ function setup() {
   });
 }
 
-
 function renderMicroBars(d) {
   const el = document.getElementById("micro-bars");
   if (!el) return;
@@ -1823,7 +1821,6 @@ function renderMicroBars(d) {
     .join("");
 }
 
-function renderFa
 function renderFastingCard() {
   const card = document.getElementById("fasting-card");
   if (!card || !settings) return;
@@ -1987,7 +1984,7 @@ function setupFastingButtons() {
   }
 }
 
-taurantBuilder() {
+function setupRestaurantBuilder() {
   const sel = document.getElementById("rb-restaurant");
   if (!sel) return;
   sel.innerHTML = RESTAURANT_BUILDERS.map(
@@ -2133,7 +2130,6 @@ async function logRestaurantBuild(saveToo) {
   loadDay();
 }
 
-
 async function tryRestoreUserData() {
   // 1) Migrate from old IndexedDB names (rebrand wiped this before)
   try {
@@ -2218,7 +2214,7 @@ async function boot() {
   // Quiet SW updates � do NOT tell users to delete the Home Screen icon
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=11", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=12", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -2242,7 +2238,7 @@ async function boot() {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== "macroledger-v11-fasting").map((k) => caches.delete(k))
+        keys.filter((k) => k !== "macroledger-v12-fix").map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */
