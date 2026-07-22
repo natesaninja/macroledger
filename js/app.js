@@ -3,6 +3,7 @@
  */
 import {
   ensureSeeded,
+  ensureRestaurantFoods,
   getSettings,
   setSettings,
   goalsFromSettings,
@@ -35,7 +36,7 @@ import {
   getStreak,
   verifyDiaryEntry,
 } from "./db.js";
-import { SEED_FOODS } from "./seed-foods.js";
+import { SEED_FOODS, RESTAURANT_FOODS } from "./seed-foods.js";
 import {
   metabolismFromSettings,
   estimateExerciseCalories,
@@ -2000,6 +2001,10 @@ function setup() {
 async function boot() {
   setup();
   await ensureSeeded(SEED_FOODS);
+  const addedRestaurants = await ensureRestaurantFoods(RESTAURANT_FOODS, "eastcoast_v1");
+  if (addedRestaurants > 0) {
+    console.log(`Added ${addedRestaurants} restaurant foods`);
+  }
 
   if (await needsOnboarding()) {
     document.getElementById("onboard").hidden = false;
@@ -2012,7 +2017,7 @@ async function boot() {
   // Force fresh app shell on iPhone (kills old MacroLedger caches)
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=4", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=5", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -2051,7 +2056,7 @@ async function boot() {
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k !== "macroledger-v4-rear")
+          .filter((k) => k !== "macroledger-v5-restaurants")
           .map((k) => caches.delete(k))
       );
     } catch {

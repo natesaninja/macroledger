@@ -513,6 +513,26 @@ export async function getDailyTarget(date) {
 }
 
 // ---- Seed ----
+function foodRowFromTuple(f, source = "seed") {
+  return {
+    name: f[0],
+    brand: f[1] || "",
+    serving_size: f[2],
+    calories: f[3],
+    protein: f[4],
+    carbs: f[5],
+    fat: f[6],
+    fiber: f[7],
+    sodium_mg: 0,
+    barcode: "",
+    source,
+    confidence: 1,
+    verified: true,
+    is_custom: false,
+    micronutrients: {},
+  };
+}
+
 export async function ensureSeeded(seedFoods) {
   const meta = await dbGet("meta", "seeded");
   if (meta && meta.value) return false;
@@ -522,29 +542,40 @@ export async function ensureSeeded(seedFoods) {
     return false;
   }
   for (const f of seedFoods) {
-    await dbAdd("foods", {
-      name: f[0],
-      brand: f[1] || "",
-      serving_size: f[2],
-      calories: f[3],
-      protein: f[4],
-      carbs: f[5],
-      fat: f[6],
-      fiber: f[7],
-      sodium_mg: 0,
-      barcode: "",
-      source: "seed",
-      confidence: 1,
-      verified: true,
-      is_custom: false,
-      micronutrients: {},
-    });
+    await dbAdd("foods", foodRowFromTuple(f, "seed"));
   }
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
     await dbPut("settings", { key, value });
   }
   await dbPut("meta", { key: "seeded", value: true });
   return true;
+}
+
+/** Add restaurant menu items for installs that already finished base seed. */
+export async function ensureRestaurantFoods(restaurantFoods, version = "eastcoast_v1") {
+  const key = `restaurants_${version}`;
+  const meta = await dbGet("meta", key);
+  if (meta && meta.value) return 0;
+  if (!restaurantFoods?.length) {
+    await dbPut("meta", { key, value: true });
+    return 0;
+  }
+
+  // Skip duplicates by brand+name
+  const existing = await listFoods();
+  const have = new Set(
+    existing.map((f) => `${(f.brand || "").toLowerCase()}|${(f.name || "").toLowerCase()}`)
+  );
+  let added = 0;
+  for (const f of restaurantFoods) {
+    const k = `${(f[1] || "").toLowerCase()}|${(f[0] || "").toLowerCase()}`;
+    if (have.has(k)) continue;
+    await dbAdd("foods", foodRowFromTuple(f, "restaurant"));
+    have.add(k);
+    added++;
+  }
+  await dbPut("meta", { key, value: true });
+  return added;
 }
 
 export async function exportAllJson() {
