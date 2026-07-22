@@ -51,7 +51,7 @@ import {
 } from "./onboarding.js";
 import { parseFoodUtterance } from "./nlp-log.js";
 import { proposeAdaptiveTargets, applyAdaptiveProposal } from "./adaptive.js";
-import { getFastingStatus, fmtDuration, PROTOCOLS } from "./fasting.js";
+import { getFastingStatus, fmtDuration, PROTOCOLS, protocolSummary } from "./fasting.js";
 import {
   RESTAURANT_BUILDERS,
   sumSelection,
@@ -1305,14 +1305,24 @@ function setup() {
 
   document.querySelectorAll(".nav-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".nav-tab").forEach((b) => b.classList.remove("active"));
-      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-      btn.classList.add("active");
-      document.getElementById(`view-${btn.dataset.view}`).classList.add("active");
-      if (btn.dataset.view === "progress") loadProgress();
-      if (btn.dataset.view === "foods") loadFoodDb();
-      if (btn.dataset.view === "goals") loadGoals();
-      if (btn.dataset.view === "meals") { loadMealsView(); renderRestaurantBuilder(); }
+      try {
+        const view = btn.dataset.view;
+        document.querySelectorAll(".nav-tab").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+        btn.classList.add("active");
+        const panel = document.getElementById(`view-${view}`);
+        if (panel) panel.classList.add("active");
+        if (view === "progress") loadProgress();
+        if (view === "foods") loadFoodDb();
+        if (view === "goals") loadGoals();
+        if (view === "meals") {
+          loadMealsView();
+          renderRestaurantBuilder();
+        }
+        if (view === "diary") loadDay();
+      } catch (err) {
+        console.warn("tab switch failed", err);
+      }
     });
   });
 
@@ -1821,76 +1831,97 @@ function renderMicroBars(d) {
     .join("");
 }
 
+function fillProtocolSelect(sel, selected) {
+  if (!sel) return;
+  const cur = selected || sel.value || "16:8";
+  sel.innerHTML = Object.entries(PROTOCOLS)
+    .map(([id, meta]) => `<option value="${id}">${meta.label} — ${meta.blurb}</option>`)
+    .join("");
+  if (PROTOCOLS[cur]) sel.value = cur;
+  else sel.value = "16:8";
+}
+
 function renderFastingCard() {
   const card = document.getElementById("fasting-card");
   if (!card || !settings) return;
-  const st = getFastingStatus(settings, new Date());
-  const phaseEl = document.getElementById("fasting-phase");
-  const timerEl = document.getElementById("fasting-timer");
-  const detailEl = document.getElementById("fasting-detail");
-  const prog = document.getElementById("fasting-progress");
-  phaseEl.textContent = st.phase === "off" ? "Off" : st.phase === "fasting" ? "Fasting" : "Eating";
-  phaseEl.className = "fasting-phase " + st.phase;
-  const sum = st.summary || protocolSummary(settings);
-  document.getElementById("fasting-title").textContent = st.enabled
-    ? `⏱ ${sum.label}`
-    : "⏱ Intermittent fasting";
-  if (!st.enabled) {
-    timerEl.textContent = "—";
-    detailEl.textContent = "Turn On below, then pick any window (12:12, 14:10, 16:8, 18:6, custom…).";
-    prog.style.width = "0%";
-  } else {
-    timerEl.textContent = fmtDuration(st.msRemaining);
-    detailEl.textContent = `${st.title} · ${st.detail}`;
-    prog.style.width = `${Math.min(100, st.progress * 100)}%`;
-    prog.style.background = st.phase === "fasting" ? "var(--protein)" : "var(--accent)";
-  }
-
-  // Sync quick controls (without fighting user mid-edit)
-  const en = document.getElementById("fast-enabled-quick");
-  const prot = document.getElementById("fast-protocol-quick");
-  const start = document.getElementById("fast-start-quick");
-  const custom = document.getElementById("fast-custom-quick");
-  const customWrap = document.getElementById("fast-custom-wrap");
-  const sumEl = document.getElementById("fast-window-summary");
-  if (prot && prot.options.length === 0) {
-    prot.innerHTML = Object.entries(PROTOCOLS)
-      .map(([id, meta]) => `<option value="${id}">${meta.label} — ${meta.blurb}</option>`)
-      .join("");
-  }
-  if (en && document.activeElement !== en) en.value = settings.fasting_enabled === "1" ? "1" : "0";
-  if (prot && document.activeElement !== prot) prot.value = settings.fasting_protocol || "16:8";
-  if (start && document.activeElement !== start) start.value = settings.eating_window_start || "12:00";
-  if (custom && document.activeElement !== custom) custom.value = settings.custom_eat_hours || "8";
-  if (customWrap) customWrap.hidden = (settings.fasting_protocol || "16:8") !== "custom";
-  if (sumEl) {
-    const s = protocolSummary(settings);
-    const { h, min } = (() => {
-      const m = String(settings.eating_window_start || "12:00").match(/(\d+):(\d+)/);
-      return m ? { h: +m[1], min: +m[2] } : { h: 12, min: 0 };
-    })();
-    const endMins = h * 60 + min + s.eat * 60;
-    const eh = Math.floor(endMins / 60) % 24;
-    const em = Math.round(endMins % 60);
-    const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
-    sumEl.textContent = settings.fasting_enabled === "1"
-      ? `Schedule: ${s.text}. Eating about ${settings.eating_window_start || "12:00"} → ~${endStr}.`
-      : `Preview: ${s.text}. Turn On to run the timer.`;
-  }
-
-  const goalsSum = document.getElementById("goals-fast-summary");
-  if (goalsSum) {
-    const s = protocolSummary(settings);
-    goalsSum.textContent = `Your window: ${s.text} (starts ${settings.eating_window_start || "12:00"}).`;
-  }
-
-  if (fastingTimerId) clearInterval(fastingTimerId);
-  if (st.enabled) {
-    fastingTimerId = setInterval(() => {
-      if (document.getElementById("view-diary")?.classList.contains("active")) {
-        renderFastingCard();
+  try {
+    const st = getFastingStatus(settings, new Date());
+    const phaseEl = document.getElementById("fasting-phase");
+    const timerEl = document.getElementById("fasting-timer");
+    const detailEl = document.getElementById("fasting-detail");
+    const prog = document.getElementById("fasting-progress");
+    if (phaseEl) {
+      phaseEl.textContent = st.phase === "off" ? "Off" : st.phase === "fasting" ? "Fasting" : "Eating";
+      phaseEl.className = "fasting-phase " + st.phase;
+    }
+    const sum = st.summary || protocolSummary(settings);
+    const titleEl = document.getElementById("fasting-title");
+    if (titleEl) {
+      titleEl.textContent = st.enabled ? `⏱ ${sum.label}` : "⏱ Intermittent fasting";
+    }
+    if (!st.enabled) {
+      if (timerEl) timerEl.textContent = "—";
+      if (detailEl) {
+        detailEl.textContent =
+          "Turn On below, then pick any window (12:12, 14:10, 16:8, 18:6, custom…).";
       }
-    }, 1000);
+      if (prog) prog.style.width = "0%";
+    } else {
+      if (timerEl) timerEl.textContent = fmtDuration(st.msRemaining);
+      if (detailEl) detailEl.textContent = `${st.title} · ${st.detail}`;
+      if (prog) {
+        prog.style.width = `${Math.min(100, st.progress * 100)}%`;
+        prog.style.background = st.phase === "fasting" ? "var(--protein)" : "var(--accent)";
+      }
+    }
+
+    // Sync quick controls (without fighting user mid-edit)
+    const en = document.getElementById("fast-enabled-quick");
+    const prot = document.getElementById("fast-protocol-quick");
+    const start = document.getElementById("fast-start-quick");
+    const custom = document.getElementById("fast-custom-quick");
+    const customWrap = document.getElementById("fast-custom-wrap");
+    const sumEl = document.getElementById("fast-window-summary");
+    if (prot && (prot.options.length === 0 || prot.options.length < Object.keys(PROTOCOLS).length)) {
+      fillProtocolSelect(prot, settings.fasting_protocol || "16:8");
+    }
+    if (en && document.activeElement !== en) en.value = settings.fasting_enabled === "1" ? "1" : "0";
+    if (prot && document.activeElement !== prot) prot.value = settings.fasting_protocol || "16:8";
+    if (start && document.activeElement !== start) start.value = settings.eating_window_start || "12:00";
+    if (custom && document.activeElement !== custom) custom.value = settings.custom_eat_hours || "8";
+    if (customWrap) customWrap.hidden = (settings.fasting_protocol || "16:8") !== "custom";
+    if (sumEl) {
+      const s = protocolSummary(settings);
+      const { h, min } = (() => {
+        const m = String(settings.eating_window_start || "12:00").match(/(\d+):(\d+)/);
+        return m ? { h: +m[1], min: +m[2] } : { h: 12, min: 0 };
+      })();
+      const endMins = h * 60 + min + s.eat * 60;
+      const eh = Math.floor(endMins / 60) % 24;
+      const em = Math.round(endMins % 60);
+      const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+      sumEl.textContent =
+        settings.fasting_enabled === "1"
+          ? `Schedule: ${s.text}. Eating about ${settings.eating_window_start || "12:00"} → ~${endStr}.`
+          : `Preview: ${s.text}. Turn On to run the timer.`;
+    }
+
+    const goalsSum = document.getElementById("goals-fast-summary");
+    if (goalsSum) {
+      const s = protocolSummary(settings);
+      goalsSum.textContent = `Your window: ${s.text} (starts ${settings.eating_window_start || "12:00"}).`;
+    }
+
+    if (fastingTimerId) clearInterval(fastingTimerId);
+    if (st.enabled) {
+      fastingTimerId = setInterval(() => {
+        if (document.getElementById("view-diary")?.classList.contains("active")) {
+          renderFastingCard();
+        }
+      }, 1000);
+    }
+  } catch (err) {
+    console.warn("renderFastingCard failed", err);
   }
 }
 
@@ -1934,11 +1965,7 @@ function setupFastingButtons() {
   const start = document.getElementById("fast-start-quick");
   const custom = document.getElementById("fast-custom-quick");
 
-  if (prot) {
-    prot.innerHTML = Object.entries(PROTOCOLS)
-      .map(([id, meta]) => `<option value="${id}">${meta.label} — ${meta.blurb}</option>`)
-      .join("");
-  }
+  fillProtocolSelect(prot, settings?.fasting_protocol || "16:8");
 
   if (en) {
     en.onchange = () => saveQuick({ fasting_enabled: en.value }, en.value === "1" ? "Fasting on" : "Fasting off");
@@ -1947,7 +1974,10 @@ function setupFastingButtons() {
     prot.onchange = async () => {
       const wrap = document.getElementById("fast-custom-wrap");
       if (wrap) wrap.hidden = prot.value !== "custom";
-      await saveQuick({ fasting_protocol: prot.value, fasting_enabled: "1" }, `Window: ${PROTOCOLS[prot.value]?.label || prot.value}`);
+      await saveQuick(
+        { fasting_protocol: prot.value, fasting_enabled: "1" },
+        `Window: ${PROTOCOLS[prot.value]?.label || prot.value}`
+      );
     };
   }
   if (start) {
@@ -2209,12 +2239,10 @@ async function boot() {
     scheduleFullBackup(exportAllJson);
   }
 
-  await loadDay();
-
-  // Quiet SW updates � do NOT tell users to delete the Home Screen icon
+  // Register SW before heavy UI work so a render bug can't block updates
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=12", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=13", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -2238,11 +2266,18 @@ async function boot() {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== "macroledger-v12-fix").map((k) => caches.delete(k))
+        keys.filter((k) => k !== "macroledger-v13").map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */
     }
+  }
+
+  try {
+    await loadDay();
+  } catch (err) {
+    console.error("loadDay failed", err);
+    toast("Diary load issue — try switching tabs or refreshing once");
   }
 }
 
