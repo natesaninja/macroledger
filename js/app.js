@@ -1,5 +1,5 @@
-ï»¿/**
- * MacroLedger PWA â€” offline-first UI
+/**
+ * MacroLedger PWA — offline-first UI
  */
 import {
   ensureSeeded,
@@ -66,25 +66,25 @@ import {
 } from "./persist.js";
 
 const MEALS = [
-  { id: "breakfast", label: "Breakfast", icon: "ðŸŒ…" },
-  { id: "lunch", label: "Lunch", icon: "â˜€ï¸" },
-  { id: "dinner", label: "Dinner", icon: "ðŸŒ™" },
-  { id: "snacks", label: "Snacks", icon: "ðŸŽ" },
+  { id: "breakfast", label: "Breakfast", icon: "??" },
+  { id: "lunch", label: "Lunch", icon: "??" },
+  { id: "dinner", label: "Dinner", icon: "??" },
+  { id: "snacks", label: "Snacks", icon: "??" },
 ];
 const CIRC = 2 * Math.PI * 52;
 
 const UI_THEMES = [
   {
-    id: "midnight",
-    name: "Midnight",
-    desc: "Default dark green",
-    swatches: ["#0f1419", "#00c47a", "#5b8def"],
-  },
-  {
     id: "light",
     name: "Light",
-    desc: "Bright & clean",
+    desc: "Default · bright & clean",
     swatches: ["#f4f6f9", "#0a9f68", "#3b6fd9"],
+  },
+  {
+    id: "midnight",
+    name: "Midnight",
+    desc: "Dark green",
+    swatches: ["#0f1419", "#00c47a", "#5b8def"],
   },
   {
     id: "ocean",
@@ -107,7 +107,7 @@ const UI_THEMES = [
 ];
 
 function applyTheme(themeId) {
-  const id = UI_THEMES.some((t) => t.id === themeId) ? themeId : "midnight";
+  const id = UI_THEMES.some((t) => t.id === themeId) ? themeId : "light";
   document.documentElement.setAttribute("data-theme", id);
   // Match browser chrome where supported
   const meta = document.querySelector('meta[name="theme-color"]');
@@ -119,7 +119,7 @@ function applyTheme(themeId) {
 function renderThemePicker(activeId) {
   const grid = document.getElementById("theme-grid");
   if (!grid) return;
-  const active = activeId || "midnight";
+  const active = activeId || "light";
   grid.innerHTML = UI_THEMES.map(
     (t) => `
     <button type="button" class="theme-card ${t.id === active ? "active" : ""}" data-theme="${t.id}" role="option" aria-selected="${t.id === active}">
@@ -287,7 +287,7 @@ async function loadDay() {
 
 function renderDay(d) {
   document.getElementById("date-label").textContent = formatDateLabel(currentDate);
-  document.getElementById("greeting").textContent = `${d.user_name}'s diary Â· on device`;
+  document.getElementById("greeting").textContent = `${d.user_name}'s diary · on device`;
 
   const rem = d.remaining.calories;
   const over = rem < 0;
@@ -361,7 +361,7 @@ function renderDensity(d) {
 
 async function refreshStreak() {
   const s = await getStreak();
-  document.getElementById("streak-chip").textContent = `ðŸ”¥ ${s.current || 0}d`;
+  document.getElementById("streak-chip").textContent = `?? ${s.current || 0}d`;
   document.getElementById("streak-chip").title = `Best streak: ${s.best || 0} days`;
 }
 
@@ -369,14 +369,14 @@ async function renderQuickRail(mode) {
   const rail = document.getElementById("quick-rail");
   const foods = mode === "favs" ? await listFavorites() : await listRecents(12);
   if (!foods.length) {
-    rail.innerHTML = `<div class="empty-state" style="padding:0.25rem 0">No ${mode === "favs" ? "favorites" : "recents"} yet â€” log foods to build this list.</div>`;
+    rail.innerHTML = `<div class="empty-state" style="padding:0.25rem 0">No ${mode === "favs" ? "favorites" : "recents"} yet — log foods to build this list.</div>`;
     return;
   }
   rail.innerHTML = foods
     .map(
       (f) => `<button type="button" class="quick-pill" data-id="${f.id}">
       <div class="qp-name">${escapeHtml(f.name)}</div>
-      <div class="qp-cal">${formatNum(f.calories)} cal Â· tap to add</div>
+      <div class="qp-cal">${formatNum(f.calories)} cal · tap to add</div>
     </button>`
     )
     .join("");
@@ -429,13 +429,13 @@ function renderBurn(d) {
   body.innerHTML = `
     <div class="burn-stats">
       <div class="burn-stat"><span class="bv">${formatNum(bp.burn_to_hit_goal)}</span><span class="bl">cal to burn</span></div>
-      <div class="burn-stat"><span class="bv">${bp.walk_minutes_to_hit_goal != null ? bp.walk_minutes_to_hit_goal + "m" : "â€”"}</span><span class="bl">walk est.</span></div>
-      <div class="burn-stat"><span class="bv">${bp.tdee != null ? formatNum(bp.tdee) : "â€”"}</span><span class="bl">TDEE</span></div>
+      <div class="burn-stat"><span class="bv">${bp.walk_minutes_to_hit_goal != null ? bp.walk_minutes_to_hit_goal + "m" : "—"}</span><span class="bl">walk est.</span></div>
+      <div class="burn-stat"><span class="bv">${bp.tdee != null ? formatNum(bp.tdee) : "—"}</span><span class="bl">TDEE</span></div>
     </div>
     <p class="burn-msg ${bp.burn_to_hit_goal <= 0 ? "ok" : ""}">${escapeHtml(bp.message)}</p>
     ${
       meta
-        ? `<p class="burn-msg" style="margin-top:0.35rem">Plan ~${formatNum(meta.target_calories)} cal Â· ${MacroLedgers(
+        ? `<p class="burn-msg" style="margin-top:0.35rem">Plan ~${formatNum(meta.target_calories)} cal · ${MacroLedgers(
             meta.suggested_macros.protein,
             meta.suggested_macros.carbs,
             meta.suggested_macros.fat
@@ -476,26 +476,26 @@ function renderMeals(d) {
         <div>
           <div class="entry-name">${escapeHtml(e.food_name)}${
             e.user_verified === false || (e.confidence != null && e.confidence < 0.8)
-              ? `<span class="flag-uncertain">âš  review</span>`
+              ? `<span class="flag-uncertain">? review</span>`
               : ""
           }${e.source && e.source !== "manual" ? `<span class="badge">${escapeHtml(e.source)}</span>` : ""}</div>
-          <div class="entry-meta">${formatNum(e.servings, 2)} Ã— ${escapeHtml(e.serving_size)}</div>
+          <div class="entry-meta">${formatNum(e.servings, 2)} × ${escapeHtml(e.serving_size)}</div>
           ${MacroLedgers(e.protein, e.carbs, e.fat, { calories: e.calories })}
         </div>
         <div class="entry-cals">${formatNum(e.calories)}</div>
         <div class="entry-actions">
           ${
             e.user_verified === false
-              ? `<button type="button" class="verify" data-id="${e.id}" title="Confirm">âœ“</button>`
+              ? `<button type="button" class="verify" data-id="${e.id}" title="Confirm">?</button>`
               : ""
           }
           ${
             e.food_id
-              ? `<button type="button" class="fav" data-id="${e.food_id}" title="Favorite">â˜…</button>`
+              ? `<button type="button" class="fav" data-id="${e.food_id}" title="Favorite">?</button>`
               : ""
           }
-          <button type="button" class="edit-serv" data-id="${e.id}" data-s="${e.servings}">âœŽ</button>
-          <button type="button" class="del" data-id="${e.id}">ðŸ—‘</button>
+          <button type="button" class="edit-serv" data-id="${e.id}" data-s="${e.servings}">?</button>
+          <button type="button" class="del" data-id="${e.id}">??</button>
         </div>
       </div>`
       )
@@ -513,7 +513,7 @@ function renderMeals(d) {
         <div class="meal-actions">
           <button type="button" class="copy-meal-btn" data-meal="${m.id}" ${
             prev[m.id] ? "" : "disabled"
-          }>ðŸ“‹</button>
+          }>??</button>
           <button type="button" class="add-meal-btn" data-meal="${m.id}">+</button>
         </div>
       </div>
@@ -584,11 +584,11 @@ function renderExercise(d) {
     <div class="entry">
       <div>
         <div class="entry-name">${escapeHtml(e.name)}</div>
-        <div class="entry-meta">${e.duration_min ? formatNum(e.duration_min) + " min" : "â€”"}</div>
+        <div class="entry-meta">${e.duration_min ? formatNum(e.duration_min) + " min" : "—"}</div>
       </div>
       <div class="entry-cals">+${formatNum(e.calories)}</div>
       <div class="entry-actions">
-        <button type="button" class="del-ex" data-id="${e.id}">ðŸ—‘</button>
+        <button type="button" class="del-ex" data-id="${e.id}">??</button>
       </div>
     </div>`
     )
@@ -685,11 +685,11 @@ async function lookupBarcode(raw) {
     return;
   }
   if (!navigator.onLine) {
-    status.textContent = "Offline â€” barcode only works for foods already saved on this device";
+    status.textContent = "Offline — barcode only works for foods already saved on this device";
     status.className = "barcode-status error";
     return;
   }
-  status.textContent = "Looking up onlineâ€¦";
+  status.textContent = "Looking up online…";
   status.className = "barcode-status";
   try {
     const res = await fetch(
@@ -732,7 +732,7 @@ async function lookupBarcode(raw) {
     selectedFood = null;
     pendingOff = food;
     showBarcodeResult(food, "openfoodfacts");
-    status.textContent = "Found online â€” will save when you add";
+    status.textContent = "Found online — will save when you add";
     status.className = "barcode-status ok";
   } catch {
     status.textContent = "Lookup failed (need internet)";
@@ -773,7 +773,7 @@ async function onBarcodeDetected(code) {
   try {
     await stopCamera();
     document.getElementById("barcode-input").value = digits;
-    setBarcodeStatus(`Scanned ${digits} â€” looking upâ€¦`, "ok");
+    setBarcodeStatus(`Scanned ${digits} — looking up…`, "ok");
     toast("Barcode scanned");
     await lookupBarcode(digits);
   } finally {
@@ -793,7 +793,7 @@ function scanUi() {
 
 async function startCamera() {
   document.getElementById("camera-scan-wrap").hidden = false;
-  setBarcodeStatus("Starting rear camera with zoomâ€¦", "");
+  setBarcodeStatus("Starting rear camera with zoom…", "");
   try {
     await startScanner(scanUi());
   } catch (err) {
@@ -812,7 +812,7 @@ async function flipCamera() {
 
 async function scanBarcodeFromFile(file) {
   if (!file) return;
-  setBarcodeStatus("Reading barcode from photoâ€¦", "");
+  setBarcodeStatus("Reading barcode from photo…", "");
   try {
     const code = await decodeBarcodeFromFile(file);
     if (code) await onBarcodeDetected(code);
@@ -877,7 +877,7 @@ async function loadProgress() {
         (w) => `<div class="weight-row">
         <span class="w-date">${w.log_date}</span>
         <span class="w-val">${formatNum(w.weight_lb, 1)} lb</span>
-        <button type="button" data-id="${w.id}">Ã—</button>
+        <button type="button" data-id="${w.id}">×</button>
       </div>`
       )
       .join("");
@@ -936,7 +936,7 @@ function renderRecipeItems() {
       (i, idx) =>
         `<div class="entry"><div><div class="entry-name">${escapeHtml(i.food_name)}</div>
         ${MacroLedgers(i.protein, i.carbs, i.fat, { calories: i.calories })}</div>
-        <button type="button" class="ghost-btn" data-i="${idx}">Ã—</button></div>`
+        <button type="button" class="ghost-btn" data-i="${idx}">×</button></div>`
     )
     .join("");
   box.querySelectorAll("button").forEach((b) =>
@@ -959,11 +959,11 @@ async function loadMealsView() {
       (m) => `<div class="food-row">
       <div>
         <div class="fname">${escapeHtml(m.name)} ${m.is_recipe ? '<span class="badge">Recipe</span>' : ""}</div>
-        <div class="fmeta">${(m.items || []).length} ingredients Â· ${formatNum(m.totals?.calories || 0)} cal</div>
+        <div class="fmeta">${(m.items || []).length} ingredients · ${formatNum(m.totals?.calories || 0)} cal</div>
       </div>
       <div>
         <button type="button" class="primary-btn log-meal" data-id="${m.id}" style="padding:0.35rem 0.75rem;font-size:0.8rem">Log</button>
-        <button type="button" class="ghost-btn del-meal" data-id="${m.id}" style="padding:0.35rem 0.5rem">Ã—</button>
+        <button type="button" class="ghost-btn del-meal" data-id="${m.id}" style="padding:0.35rem 0.5rem">×</button>
       </div>
     </div>`
     )
@@ -985,7 +985,7 @@ async function loadMealsView() {
 
 async function loadGoals() {
   settings = await getSettings();
-  renderThemePicker(settings.ui_theme || "midnight");
+  renderThemePicker(settings.ui_theme || "light");
   const map = {
     "set-user-name": "user_name",
     "set-weight": "body_weight_lb",
@@ -1027,7 +1027,7 @@ async function loadGoals() {
     ap.innerHTML = `<p class="hint" style="margin:0">Adaptive off or unavailable.</p>`;
   } else {
     ap.innerHTML = `<div class="metabolism-panel">
-      <strong>Adaptive suggestion:</strong> ${formatNum(prop.current)} â†’ <strong>${formatNum(prop.proposed)}</strong> kcal
+      <strong>Adaptive suggestion:</strong> ${formatNum(prop.current)} ? <strong>${formatNum(prop.proposed)}</strong> kcal
       (${prop.delta >= 0 ? "+" : ""}${prop.delta})
       <p class="hint" style="margin:0.35rem 0 0">${escapeHtml(prop.reason)}</p>
       ${MacroLedgers(prop.macros.protein, prop.macros.carbs, prop.macros.fat)}
@@ -1142,7 +1142,7 @@ function showOnboardStep() {
       })
     );
   } else if (step === "review") {
-    el.innerHTML = `<h2>Your plan</h2><p class="hint">Calculatingâ€¦</p>`;
+    el.innerHTML = `<h2>Your plan</h2><p class="hint">Calculating…</p>`;
     computeOnboardingSuggestion(onboardDraft).then((sug) => {
       if (!sug.ok) {
         el.innerHTML = `<h2>Your plan</h2><p class="hint">${escapeHtml(sug.error)}</p>`;
@@ -1202,7 +1202,7 @@ function setupOnboarding() {
     saveProfileBackup(s);
     scheduleFullBackup(exportAllJson);
     document.getElementById("onboard").hidden = true;
-    toast("You're set â€” profile is saved on this phone");
+    toast("You're set — profile is saved on this phone");
     loadDay();
   };
 }
@@ -1225,10 +1225,10 @@ function renderReviewList() {
       const low = d.confidence < 0.8;
       return `<div class="review-item ${low ? "low" : ""}">
         <div class="ri-head">
-          <span>${escapeHtml(d.food_name)} ${low ? '<span class="flag-uncertain">âš  ' + Math.round(d.confidence * 100) + '%</span>' : ""}</span>
+          <span>${escapeHtml(d.food_name)} ${low ? '<span class="flag-uncertain">? ' + Math.round(d.confidence * 100) + '%</span>' : ""}</span>
           <button type="button" class="ghost-btn rev-del" data-i="${i}" style="padding:2px 8px">Remove</button>
         </div>
-        <div class="entry-meta">${escapeHtml(d.serving_size || "")} Â· ${formatNum(d.calories)} cal</div>
+        <div class="entry-meta">${escapeHtml(d.serving_size || "")} · ${formatNum(d.calories)} cal</div>
         ${MacroLedgers(d.protein, d.carbs, d.fat)}
         <label>Servings <input type="number" class="rev-serv" data-i="${i}" min="0.1" step="0.25" value="${d.servings}" /></label>
       </div>`;
@@ -1295,7 +1295,7 @@ function setup() {
     const meal = guessMealSlot();
     document.getElementById("review-meal").value = meal;
     const drafts = await parseFoodUtterance(text, meal);
-    if (!drafts.length) return toast("Could not parse â€” try simpler phrases");
+    if (!drafts.length) return toast("Could not parse — try simpler phrases");
     document.getElementById("nlp-modal").hidden = true;
     openReview(drafts);
   };
@@ -1309,7 +1309,7 @@ function setup() {
     };
     rec.onerror = () => toast("Mic error");
     rec.start();
-    toast("Listeningâ€¦");
+    toast("Listening…");
   };
   document.getElementById("close-review").onclick = document.getElementById(
     "review-discard"
@@ -1530,7 +1530,7 @@ function setup() {
     const line = document.getElementById("ex-estimate-line");
     if (!w) line.innerHTML = "Set weight in Goals to estimate burn.";
     else if (est.calories != null)
-      line.innerHTML = `At <strong>${w} lb</strong> â‰ˆ <strong>${est.calories} cal</strong> (MET ${est.met})`;
+      line.innerHTML = `At <strong>${w} lb</strong> ˜ <strong>${est.calories} cal</strong> (MET ${est.met})`;
     return est;
   }
   document.getElementById("ex-estimate-btn").onclick = async () => {
@@ -1614,12 +1614,12 @@ function setup() {
     document.getElementById("set-carbs").value = meta.suggested_macros.carbs;
     document.getElementById("set-fat").value = meta.suggested_macros.fat;
     await loadGoals();
-    toast("Suggested goals filled â€” Save goals");
+    toast("Suggested goals filled — Save goals");
   };
   document.getElementById("apply-adaptive-btn").onclick = async () => {
     const prop = await proposeAdaptiveTargets();
     if (!prop) return toast("Need weight history or adaptive enabled");
-    if (!confirm(`Apply adaptive targets?\n${prop.current} â†’ ${prop.proposed} kcal\n${prop.reason}`)) return;
+    if (!confirm(`Apply adaptive targets?\n${prop.current} ? ${prop.proposed} kcal\n${prop.reason}`)) return;
     await applyAdaptiveProposal(prop);
     toast("Adaptive targets applied");
     loadGoals();
@@ -1673,7 +1673,7 @@ function setup() {
     toast("CSV exported");
   };
 
-  // Install PWA â€” iOS Safari is primary (no beforeinstallprompt on iOS)
+  // Install PWA — iOS Safari is primary (no beforeinstallprompt on iOS)
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
@@ -1696,7 +1696,7 @@ function setup() {
   });
 
   window.addEventListener("beforeinstallprompt", (e) => {
-    // Android/desktop Chrome only â€” still supported, not our focus
+    // Android/desktop Chrome only — still supported, not our focus
     e.preventDefault();
     deferredInstall = e;
     if (!isIos && !localStorage.getItem("ct-install-dismiss") && !isStandalone) {
@@ -1726,13 +1726,13 @@ function setup() {
   if (isIos && !isStandalone && !localStorage.getItem("ct-install-dismiss")) {
     document.getElementById("install-title").textContent = "Install on iPhone";
     document.getElementById("install-hint").innerHTML =
-      "Safari â†’ Share â†’ <strong>Add to Home Screen</strong> for an app icon &amp; offline use.";
+      "Safari ? Share ? <strong>Add to Home Screen</strong> for an app icon &amp; offline use.";
     document.getElementById("install-btn").textContent = "Show steps";
     document.getElementById("install-banner").classList.add("show");
   }
   if (isStandalone) {
     document.getElementById("install-banner").classList.remove("show");
-    document.getElementById("storage-label").textContent = "Home Screen app Â· on device";
+    document.getElementById("storage-label").textContent = "Home Screen app · on device";
   }
 
   window.addEventListener("online", updateOnline);
@@ -1799,9 +1799,9 @@ async function boot() {
   // Apply saved theme ASAP
   try {
     const s0 = await getSettings();
-    applyTheme(s0.ui_theme || "midnight");
+    applyTheme(s0.ui_theme || "light");
   } catch {
-    applyTheme("midnight");
+    applyTheme("light");
   }
 
   await ensureSeeded(SEED_FOODS);
@@ -1824,10 +1824,10 @@ async function boot() {
 
   await loadDay();
 
-  // Quiet SW updates â€” do NOT tell users to delete the Home Screen icon
+  // Quiet SW updates — do NOT tell users to delete the Home Screen icon
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=9", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=9b", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -1851,7 +1851,7 @@ async function boot() {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== "macroledger-v9-themes").map((k) => caches.delete(k))
+        keys.filter((k) => k !== "macroledger-v9b-light").map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */

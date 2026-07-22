@@ -1,5 +1,5 @@
-﻿/* MacroLedger service worker — network-first so iPhone gets updates */
-const CACHE = "macroledger-v9-themes";
+/* MacroLedger service worker � network-first so iPhone gets updates */
+const CACHE = "macroledger-v9b-light";
 const ASSETS = [
   "./",
   "./index.html",
