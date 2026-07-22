@@ -1,5 +1,5 @@
 ﻿/* MacroLedger service worker — network-first so iPhone gets updates */
-const CACHE = "macroledger-v3-camera";
+const CACHE = "macroledger-v4-rear";
 const ASSETS = [
   "./",
   "./index.html",
