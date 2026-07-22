@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=10" />
+  <link rel="manifest" href="manifest.webmanifest?v=11" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=10" />
+  <link rel="stylesheet" href="css/app.css?v=11" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">🔥 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">MacroLedger v10 · IF + builder</span>
+      <span id="app-version" class="app-version">MacroLedger v11 · IF windows</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -129,11 +129,36 @@
             <span class="fasting-phase" id="fasting-phase">Off</span>
           </div>
           <div class="fasting-timer" id="fasting-timer">—</div>
-          <div class="fasting-detail" id="fasting-detail">Enable in Goals to track your window.</div>
+          <div class="fasting-detail" id="fasting-detail">Pick a window below (16:8, 18:6, custom, …).</div>
           <div class="fasting-bar"><i id="fasting-progress"></i></div>
+          <div class="fasting-quick" id="fasting-quick">
+            <div class="fasting-quick-row">
+              <label class="fasting-inline">
+                On
+                <select id="fast-enabled-quick" aria-label="Fasting on or off">
+                  <option value="0">Off</option>
+                  <option value="1">On</option>
+                </select>
+              </label>
+              <label class="fasting-inline">
+                Window
+                <select id="fast-protocol-quick" aria-label="Fasting protocol"></select>
+              </label>
+              <label class="fasting-inline">
+                Eat from
+                <input type="time" id="fast-start-quick" aria-label="Eating window start" />
+              </label>
+              <label class="fasting-inline" id="fast-custom-wrap" hidden>
+                Eat hours
+                <input type="number" id="fast-custom-quick" min="1" max="23" step="0.5" value="8" aria-label="Custom eating hours" />
+              </label>
+            </div>
+            <p class="hint" id="fast-window-summary" style="margin:0.4rem 0 0">—</p>
+          </div>
           <div class="fasting-actions">
             <button type="button" class="ghost-btn" id="fasting-end-meal">I just finished eating</button>
-            <button type="button" class="ghost-btn" id="fasting-clear-meal">Clear last meal</button>
+            <button type="button" class="ghost-btn" id="fasting-reset-timer">↻ Reset timer</button>
+            <button type="button" class="ghost-btn" id="fasting-clear-meal">Use schedule only</button>
           </div>
         </div>
 
@@ -355,6 +380,10 @@
             </label>
 
             <h3 class="card-title span-2">Intermittent fasting</h3>
+            <p class="hint span-2" style="margin:0">
+              Choose any schedule — 12:12, 14:10, 16:8, 18:6, 20:4, OMAD, or custom hours.
+              Also editable on the diary fasting card.
+            </p>
             <label>Fasting tracker
               <select name="fasting_enabled" id="set-fasting-enabled">
                 <option value="0">Off</option>
@@ -363,19 +392,23 @@
             </label>
             <label>Protocol
               <select name="fasting_protocol" id="set-fasting-protocol">
-                <option value="16:8">16:8</option>
-                <option value="18:6">18:6</option>
-                <option value="20:4">20:4</option>
-                <option value="omad">OMAD</option>
-                <option value="custom">Custom</option>
+                <option value="12:12">12:12 — 12h fast / 12h eat</option>
+                <option value="14:10">14:10 — 14h fast / 10h eat</option>
+                <option value="15:9">15:9 — 15h fast / 9h eat</option>
+                <option value="16:8">16:8 — 16h fast / 8h eat</option>
+                <option value="18:6">18:6 — 18h fast / 6h eat</option>
+                <option value="20:4">20:4 — 20h fast / 4h eat</option>
+                <option value="omad">OMAD — ~1h eat</option>
+                <option value="custom">Custom eat hours</option>
               </select>
             </label>
             <label>Eating window starts
               <input type="time" name="eating_window_start" id="set-eating-start" />
             </label>
-            <label>Custom eat hours
+            <label>Custom eat hours (if Custom)
               <input type="number" name="custom_eat_hours" id="set-custom-eat" min="1" max="23" step="0.5" value="8" />
             </label>
+            <p class="hint span-2" id="goals-fast-summary" style="margin:0">—</p>
 
             <div class="span-2 form-actions">
               <button type="submit" class="primary-btn">Save goals</button>
@@ -534,6 +567,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=10"></script>
+  <script type="module" src="js/app.js?v=11"></script>
 </body>
 </html>

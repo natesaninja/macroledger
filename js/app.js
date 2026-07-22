@@ -1823,6 +1823,7 @@ function renderMicroBars(d) {
     .join("");
 }
 
+function renderFa
 function renderFastingCard() {
   const card = document.getElementById("fasting-card");
   if (!card || !settings) return;
@@ -1833,12 +1834,13 @@ function renderFastingCard() {
   const prog = document.getElementById("fasting-progress");
   phaseEl.textContent = st.phase === "off" ? "Off" : st.phase === "fasting" ? "Fasting" : "Eating";
   phaseEl.className = "fasting-phase " + st.phase;
+  const sum = st.summary || protocolSummary(settings);
   document.getElementById("fasting-title").textContent = st.enabled
-    ? `⏱ ${st.protocol || "IF"}`
+    ? `⏱ ${sum.label}`
     : "⏱ Intermittent fasting";
   if (!st.enabled) {
     timerEl.textContent = "—";
-    detailEl.textContent = "Enable in Goals to track your eating window.";
+    detailEl.textContent = "Turn On below, then pick any window (12:12, 14:10, 16:8, 18:6, custom…).";
     prog.style.width = "0%";
   } else {
     timerEl.textContent = fmtDuration(st.msRemaining);
@@ -1846,6 +1848,45 @@ function renderFastingCard() {
     prog.style.width = `${Math.min(100, st.progress * 100)}%`;
     prog.style.background = st.phase === "fasting" ? "var(--protein)" : "var(--accent)";
   }
+
+  // Sync quick controls (without fighting user mid-edit)
+  const en = document.getElementById("fast-enabled-quick");
+  const prot = document.getElementById("fast-protocol-quick");
+  const start = document.getElementById("fast-start-quick");
+  const custom = document.getElementById("fast-custom-quick");
+  const customWrap = document.getElementById("fast-custom-wrap");
+  const sumEl = document.getElementById("fast-window-summary");
+  if (prot && prot.options.length === 0) {
+    prot.innerHTML = Object.entries(PROTOCOLS)
+      .map(([id, meta]) => `<option value="${id}">${meta.label} — ${meta.blurb}</option>`)
+      .join("");
+  }
+  if (en && document.activeElement !== en) en.value = settings.fasting_enabled === "1" ? "1" : "0";
+  if (prot && document.activeElement !== prot) prot.value = settings.fasting_protocol || "16:8";
+  if (start && document.activeElement !== start) start.value = settings.eating_window_start || "12:00";
+  if (custom && document.activeElement !== custom) custom.value = settings.custom_eat_hours || "8";
+  if (customWrap) customWrap.hidden = (settings.fasting_protocol || "16:8") !== "custom";
+  if (sumEl) {
+    const s = protocolSummary(settings);
+    const { h, min } = (() => {
+      const m = String(settings.eating_window_start || "12:00").match(/(\d+):(\d+)/);
+      return m ? { h: +m[1], min: +m[2] } : { h: 12, min: 0 };
+    })();
+    const endMins = h * 60 + min + s.eat * 60;
+    const eh = Math.floor(endMins / 60) % 24;
+    const em = Math.round(endMins % 60);
+    const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+    sumEl.textContent = settings.fasting_enabled === "1"
+      ? `Schedule: ${s.text}. Eating about ${settings.eating_window_start || "12:00"} → ~${endStr}.`
+      : `Preview: ${s.text}. Turn On to run the timer.`;
+  }
+
+  const goalsSum = document.getElementById("goals-fast-summary");
+  if (goalsSum) {
+    const s = protocolSummary(settings);
+    goalsSum.textContent = `Your window: ${s.text} (starts ${settings.eating_window_start || "12:00"}).`;
+  }
+
   if (fastingTimerId) clearInterval(fastingTimerId);
   if (st.enabled) {
     fastingTimerId = setInterval(() => {
@@ -1859,25 +1900,94 @@ function renderFastingCard() {
 function setupFastingButtons() {
   const endBtn = document.getElementById("fasting-end-meal");
   const clearBtn = document.getElementById("fasting-clear-meal");
+  const resetBtn = document.getElementById("fasting-reset-timer");
+
+  const saveQuick = async (partial, msg) => {
+    await setSettings(partial);
+    settings = await getSettings();
+    if (msg) toast(msg);
+    renderFastingCard();
+  };
+
   if (endBtn) {
     endBtn.onclick = async () => {
-      await setSettings({ last_meal_ended_at: new Date().toISOString(), fasting_enabled: "1" });
-      settings = await getSettings();
-      toast("Fast started after your meal");
-      renderFastingCard();
+      await saveQuick(
+        { last_meal_ended_at: new Date().toISOString(), fasting_enabled: "1" },
+        "Timer started — fasting from now"
+      );
     };
   }
   if (clearBtn) {
     clearBtn.onclick = async () => {
-      await setSettings({ last_meal_ended_at: "" });
-      settings = await getSettings();
-      toast("Using schedule window only");
-      renderFastingCard();
+      await saveQuick({ last_meal_ended_at: "" }, "Using daily schedule only");
+    };
+  }
+  if (resetBtn) {
+    resetBtn.onclick = async () => {
+      // Full timer reset: clear meal override, keep protocol, re-enable
+      await saveQuick(
+        { last_meal_ended_at: "", fasting_enabled: "1" },
+        "Timer reset to your schedule"
+      );
+    };
+  }
+
+  const en = document.getElementById("fast-enabled-quick");
+  const prot = document.getElementById("fast-protocol-quick");
+  const start = document.getElementById("fast-start-quick");
+  const custom = document.getElementById("fast-custom-quick");
+
+  if (prot) {
+    prot.innerHTML = Object.entries(PROTOCOLS)
+      .map(([id, meta]) => `<option value="${id}">${meta.label} — ${meta.blurb}</option>`)
+      .join("");
+  }
+
+  if (en) {
+    en.onchange = () => saveQuick({ fasting_enabled: en.value }, en.value === "1" ? "Fasting on" : "Fasting off");
+  }
+  if (prot) {
+    prot.onchange = async () => {
+      const wrap = document.getElementById("fast-custom-wrap");
+      if (wrap) wrap.hidden = prot.value !== "custom";
+      await saveQuick({ fasting_protocol: prot.value, fasting_enabled: "1" }, `Window: ${PROTOCOLS[prot.value]?.label || prot.value}`);
+    };
+  }
+  if (start) {
+    start.onchange = () => saveQuick({ eating_window_start: start.value || "12:00", fasting_enabled: "1" }, "Eating start updated");
+  }
+  if (custom) {
+    custom.onchange = () =>
+      saveQuick(
+        { custom_eat_hours: custom.value || "8", fasting_protocol: "custom", fasting_enabled: "1" },
+        `Custom: ${custom.value}h eating window`
+      );
+  }
+
+  // Goals form: show custom field + live summary when protocol changes
+  const goalsProt = document.getElementById("set-fasting-protocol");
+  const goalsCustom = document.getElementById("set-custom-eat");
+  if (goalsProt) {
+    goalsProt.onchange = () => {
+      if (goalsCustom) {
+        goalsCustom.closest("label")?.classList.toggle("dim", goalsProt.value !== "custom");
+      }
+      // preview only until Save
+      const s = {
+        ...(settings || {}),
+        fasting_protocol: goalsProt.value,
+        custom_eat_hours: goalsCustom?.value || "8",
+        eating_window_start: document.getElementById("set-eating-start")?.value || "12:00",
+        fasting_enabled: document.getElementById("set-fasting-enabled")?.value || "0",
+      };
+      const sum = protocolSummary(s);
+      const el = document.getElementById("goals-fast-summary");
+      if (el) el.textContent = `Preview: ${sum.text}. Save goals to apply.`;
     };
   }
 }
 
-function setupRestaurantBuilder() {
+taurantBuilder() {
   const sel = document.getElementById("rb-restaurant");
   if (!sel) return;
   sel.innerHTML = RESTAURANT_BUILDERS.map(
@@ -2108,7 +2218,7 @@ async function boot() {
   // Quiet SW updates � do NOT tell users to delete the Home Screen icon
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=10", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=11", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -2132,7 +2242,7 @@ async function boot() {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== "macroledger-v10-features").map((k) => caches.delete(k))
+        keys.filter((k) => k !== "macroledger-v11-fasting").map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */

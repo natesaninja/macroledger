@@ -1,19 +1,23 @@
 /**
  * Intermittent fasting schedule + live timer.
+ *
  * Settings:
  *  fasting_enabled: "0"|"1"
- *  fasting_protocol: "16:8"|"18:6"|"20:4"|"omad"|"custom"
- *  eating_window_start: "HH:MM" local (start of eating window)
- *  custom_fast_hours: "16" when protocol=custom
- *  last_meal_ended_at: ISO timestamp (optional override "I just finished eating")
+ *  fasting_protocol: "12:12"|"14:10"|"15:9"|"16:8"|"18:6"|"20:4"|"omad"|"custom"
+ *  eating_window_start: "HH:MM" local (when eating window opens)
+ *  custom_eat_hours: hours allowed to eat when protocol=custom (e.g. 8)
+ *  last_meal_ended_at: ISO — "I just finished eating" override
  */
 
 export const PROTOCOLS = {
-  "16:8": { eatHours: 8, label: "16:8 (popular)" },
-  "18:6": { eatHours: 6, label: "18:6" },
-  "20:4": { eatHours: 4, label: "20:4" },
-  omad: { eatHours: 1, label: "OMAD (~1 hour)" },
-  custom: { eatHours: null, label: "Custom" },
+  "12:12": { eatHours: 12, label: "12:12", blurb: "12h fast · 12h eat" },
+  "14:10": { eatHours: 10, label: "14:10", blurb: "14h fast · 10h eat" },
+  "15:9": { eatHours: 9, label: "15:9", blurb: "15h fast · 9h eat" },
+  "16:8": { eatHours: 8, label: "16:8", blurb: "16h fast · 8h eat (popular)" },
+  "18:6": { eatHours: 6, label: "18:6", blurb: "18h fast · 6h eat" },
+  "20:4": { eatHours: 4, label: "20:4", blurb: "20h fast · 4h eat" },
+  omad: { eatHours: 1, label: "OMAD", blurb: "~23h fast · ~1h eat" },
+  custom: { eatHours: null, label: "Custom", blurb: "Set your own eat hours" },
 };
 
 export function parseHHMM(s, fallback = "12:00") {
@@ -25,19 +29,26 @@ export function parseHHMM(s, fallback = "12:00") {
 export function eatHoursFromSettings(s) {
   const p = s.fasting_protocol || "16:8";
   if (p === "custom") {
-    const n = parseFloat(s.custom_eat_hours || s.custom_fast_hours);
-    // custom_eat_hours preferred; if only fast hours given: eat = 24 - fast
-    if (s.custom_eat_hours) return Math.min(23, Math.max(1, parseFloat(s.custom_eat_hours) || 8));
-    if (s.custom_fast_hours) return Math.min(23, Math.max(1, 24 - (parseFloat(s.custom_fast_hours) || 16)));
+    if (s.custom_eat_hours != null && String(s.custom_eat_hours).trim() !== "") {
+      return Math.min(23, Math.max(1, parseFloat(s.custom_eat_hours) || 8));
+    }
+    if (s.custom_fast_hours != null && String(s.custom_fast_hours).trim() !== "") {
+      return Math.min(23, Math.max(1, 24 - (parseFloat(s.custom_fast_hours) || 16)));
+    }
     return 8;
   }
-  return PROTOCOLS[p]?.eatHours || 8;
+  return PROTOCOLS[p]?.eatHours ?? 8;
 }
 
-/**
- * Build today's eating window [start, end) in Date objects (local).
- * If end crosses midnight, end is tomorrow.
- */
+export function protocolSummary(settings) {
+  const eat = eatHoursFromSettings(settings);
+  const fast = Math.round((24 - eat) * 10) / 10;
+  const p = settings.fasting_protocol || "16:8";
+  const label = PROTOCOLS[p]?.label || p;
+  return { label, eat, fast, text: `${fast}h fast · ${eat}h eat` };
+}
+
+/** Today's eating window [start, end). End may be next calendar day. */
 export function windowForDay(settings, now = new Date()) {
   const { h, min } = parseHHMM(settings.eating_window_start || "12:00");
   const eatH = eatHoursFromSettings(settings);
@@ -46,22 +57,19 @@ export function windowForDay(settings, now = new Date()) {
   return { start, end, eatHours: eatH, fastHours: 24 - eatH };
 }
 
-/**
- * If user set last_meal_ended_at, fasting started then and lasts (24 - eat) hours
- * until they can eat again — classic "started fast after last bite".
- * Prefer schedule windows unless last_meal is more recent and still in fast.
- */
 export function getFastingStatus(settings, now = new Date()) {
   if (settings.fasting_enabled !== "1") {
     return {
       enabled: false,
       phase: "off",
       title: "Fasting off",
-      detail: "Turn on in Goals to track your window.",
+      detail: "Turn on below or in Goals. Pick any window — not just 16:8.",
       progress: 0,
       msRemaining: 0,
       msElapsed: 0,
       window: null,
+      protocol: settings.fasting_protocol || "16:8",
+      summary: protocolSummary(settings),
     };
   }
 
@@ -72,45 +80,28 @@ export function getFastingStatus(settings, now = new Date()) {
   let title;
   let detail;
 
-  // Schedule-based
-  const inWindow =
-    (now >= win.start && now < win.end) ||
-    // window that started yesterday still open
-    (() => {
-      const yStart = new Date(win.start.getTime() - 86400000);
-      const yEnd = new Date(win.end.getTime() - 86400000);
-      return now >= yStart && now < yEnd;
-    })();
-
-  // Also check tomorrow's window if start is later today and we're before it — fasting
   if (now >= win.start && now < win.end) {
     phase = "eating";
     phaseStart = win.start;
     phaseEnd = win.end;
     title = "Eating window";
-    detail = `Open until ${fmtTime(win.end)}`;
+    detail = `Open until ${fmtTime(win.end)} · ${protocolSummary(settings).text}`;
   } else if (now < win.start) {
-    // fasting until today's window
     phase = "fasting";
-    // previous window end = start - fast? actually previous end = today's start (if contiguous) 
-    // or yesterday's end
-    const prevEnd = win.start;
-    const prevStart = new Date(prevEnd.getTime() - win.fastHours * 3600 * 1000);
-    phaseStart = prevStart;
-    phaseEnd = prevEnd;
+    phaseEnd = win.start;
+    phaseStart = new Date(phaseEnd.getTime() - win.fastHours * 3600 * 1000);
     title = "Fasting";
-    detail = `Eat from ${fmtTime(win.start)}`;
+    detail = `Eat from ${fmtTime(win.start)} · ${protocolSummary(settings).text}`;
   } else {
-    // after today's window ended — fasting until tomorrow's start
     phase = "fasting";
     phaseStart = win.end;
     const nextStart = new Date(win.start.getTime() + 86400000);
     phaseEnd = nextStart;
     title = "Fasting";
-    detail = `Eat from ${fmtTime(nextStart)}`;
+    detail = `Eat from ${fmtTime(nextStart)} · ${protocolSummary(settings).text}`;
   }
 
-  // Optional: "I just finished eating" override
+  // "I just finished eating" override
   if (settings.last_meal_ended_at) {
     const mealEnd = new Date(settings.last_meal_ended_at);
     if (!Number.isNaN(mealEnd.getTime())) {
@@ -121,7 +112,7 @@ export function getFastingStatus(settings, now = new Date()) {
         phaseStart = mealEnd;
         phaseEnd = fastEnd;
         title = "Fasting";
-        detail = `Until ${fmtTime(fastEnd)} (from last meal)`;
+        detail = `Until ${fmtTime(fastEnd)} (timer from last meal)`;
       }
     }
   }
@@ -140,6 +131,7 @@ export function getFastingStatus(settings, now = new Date()) {
     msElapsed: elapsed,
     window: win,
     protocol: settings.fasting_protocol || "16:8",
+    summary: protocolSummary(settings),
   };
 }
 
@@ -148,7 +140,7 @@ export function fmtDuration(ms) {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m ${String(sec).padStart(2, "0")}s`;
   return `${m}m ${String(sec).padStart(2, "0")}s`;
 }
 

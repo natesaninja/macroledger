@@ -1842,6 +1842,34 @@ body {
   transition: width 0.4s ease;
 }
 .fasting-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.fasting-quick {
+  margin: 0.55rem 0 0.65rem;
+  padding: 0.65rem 0.7rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.fasting-quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: flex-end;
+}
+.fasting-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.fasting-inline select,
+.fasting-inline input[type="time"],
+.fasting-inline input[type="number"] {
+  min-width: 7rem;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.5rem;
+}
 
 /* Restaurant builder */
 .rb-formats { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.65rem 0; }
