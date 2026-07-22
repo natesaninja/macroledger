@@ -1789,3 +1789,86 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+/* Fasting card */
+.fasting-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.85rem;
+  box-shadow: var(--shadow);
+}
+.fasting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+.fasting-phase {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.fasting-phase.fasting { background: rgba(91,141,239,0.15); color: var(--protein); }
+.fasting-phase.eating { background: var(--accent-dim); color: var(--accent); }
+.fasting-phase.off { background: var(--bg-elevated); color: var(--text-muted); }
+.fasting-timer {
+  font-family: var(--mono);
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin: 0.15rem 0;
+}
+.fasting-detail { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0.55rem; }
+.fasting-bar {
+  height: 8px;
+  background: var(--bg-elevated);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 0.65rem;
+}
+.fasting-bar > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.fasting-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+/* Restaurant builder */
+.rb-formats { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.65rem 0; }
+.rb-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 0.55rem;
+  background: var(--bg-elevated);
+}
+.rb-group h4 { margin: 0 0 0.45rem; font-size: 0.85rem; }
+.rb-opts { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.rb-opt {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.rb-opt.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 600;
+}
+.micro-bars .macro { min-width: 0; }
+.macro.sodium .bar > i { background: #e8a838; }
+.macro.sugar .bar > i { background: #e85d9a; }

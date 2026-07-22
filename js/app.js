@@ -51,6 +51,13 @@ import {
 } from "./onboarding.js";
 import { parseFoodUtterance } from "./nlp-log.js";
 import { proposeAdaptiveTargets, applyAdaptiveProposal } from "./adaptive.js";
+import { getFastingStatus, fmtDuration, PROTOCOLS } from "./fasting.js";
+import {
+  RESTAURANT_BUILDERS,
+  sumSelection,
+  selectionToLines,
+} from "./restaurant-builder.js";
+
 import {
   startScanner,
   stopScanner,
@@ -167,6 +174,8 @@ let pendingOff = null;
 let modalMeal = "breakfast";
 let deferredInstall = null;
 let scanBusy = false;
+let fastingTimerId = null;
+let rbState = { builderId: "chipotle", formatId: null, selected: {} };
 let reviewDrafts = [];
 let onboardStep = 0;
 let onboardDraft = {
@@ -264,11 +273,11 @@ async function loadDay() {
   const weightLb = await resolveWeightLb(settings);
   const meta = await metabolismFromSettings(settings);
 
-  const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+  const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium_mg: 0, sugar_g: 0 };
   const byMeal = { breakfast: [], lunch: [], dinner: [], snacks: [] };
   const mealTotals = {};
   for (const m of MEALS) {
-    mealTotals[m.id] = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+    mealTotals[m.id] = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium_mg: 0, sugar_g: 0 };
   }
   for (const e of entries) {
     byMeal[e.meal]?.push(e);
@@ -349,6 +358,8 @@ function renderDay(d) {
 
   renderBurn(d);
   renderDensity(d);
+  renderMicroBars(d);
+  renderFastingCard();
   renderWater(d.water, d.goals.water);
   renderMeals(d);
   renderExercise(d);
@@ -421,6 +432,8 @@ async function renderQuickRail(mode) {
         carbs: food.carbs,
         fat: food.fat,
         fiber: food.fiber || 0,
+        sodium_mg: food.sodium_mg || 0,
+        sugar_g: food.sugar_g || 0,
         source: "quick",
         user_verified: true,
       });
@@ -1009,6 +1022,8 @@ async function loadMealsView() {
 async function loadGoals() {
   settings = await getSettings();
   renderThemePicker(settings.ui_theme || "light");
+  const eatStart = document.getElementById("set-eating-start");
+  if (eatStart && !settings.eating_window_start) settings.eating_window_start = "12:00";
   const map = {
     "set-user-name": "user_name",
     "set-weight": "body_weight_lb",
@@ -1024,6 +1039,13 @@ async function loadGoals() {
     "set-fat": "fat_goal",
     "set-fiber": "fiber_goal",
     "set-water": "water_goal",
+    "set-sodium": "sodium_goal",
+    "set-sugar": "sugar_goal",
+    "set-show-micros": "show_micros",
+    "set-fasting-enabled": "fasting_enabled",
+    "set-fasting-protocol": "fasting_protocol",
+    "set-eating-start": "eating_window_start",
+    "set-custom-eat": "custom_eat_hours",
     "set-adaptive": "adaptive_enabled",
   };
   for (const [id, key] of Object.entries(map)) {
@@ -1291,7 +1313,7 @@ function setup() {
       if (btn.dataset.view === "progress") loadProgress();
       if (btn.dataset.view === "foods") loadFoodDb();
       if (btn.dataset.view === "goals") loadGoals();
-      if (btn.dataset.view === "meals") loadMealsView();
+      if (btn.dataset.view === "meals") { loadMealsView(); renderRestaurantBuilder(); }
     });
   });
 
@@ -1505,6 +1527,8 @@ function setup() {
       carbs: food.carbs * servings,
       fat: food.fat * servings,
       fiber: (food.fiber || 0) * servings,
+      sodium_mg: (food.sodium_mg || 0) * servings,
+      sugar_g: (food.sugar_g || 0) * servings,
     });
     toast(`Added ${food.name}`);
     closeModal();
@@ -1770,6 +1794,236 @@ function setup() {
   });
 }
 
+
+function renderMicroBars(d) {
+  const el = document.getElementById("micro-bars");
+  if (!el) return;
+  if (!settings || settings.show_micros === "0") {
+    el.innerHTML = "";
+    return;
+  }
+  const items = [
+    { key: "sodium_mg", goalKey: "sodium", label: "Sodium", unit: "mg", cls: "sodium" },
+    { key: "sugar_g", goalKey: "sugar", label: "Sugar", unit: "g", cls: "sugar" },
+  ];
+  el.innerHTML = items
+    .map((m) => {
+      const used = d.totals[m.key] || 0;
+      const goal = d.goals[m.goalKey] || 1;
+      const p = pct(used, goal);
+      const left = goal - used;
+      return `<div class="macro ${m.cls}">
+        <div class="macro-head"><span>${m.label}</span><strong>${formatNum(used)}${m.unit} / ${formatNum(goal)}${m.unit}</strong></div>
+        <div class="bar"><i style="width:${p}%"></i></div>
+        <div class="macro-head" style="margin-top:0.25rem;margin-bottom:0">
+          <span style="font-size:0.68rem">${left >= 0 ? formatNum(left) + m.unit + " left" : formatNum(Math.abs(left)) + m.unit + " over"}</span>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
+function renderFastingCard() {
+  const card = document.getElementById("fasting-card");
+  if (!card || !settings) return;
+  const st = getFastingStatus(settings, new Date());
+  const phaseEl = document.getElementById("fasting-phase");
+  const timerEl = document.getElementById("fasting-timer");
+  const detailEl = document.getElementById("fasting-detail");
+  const prog = document.getElementById("fasting-progress");
+  phaseEl.textContent = st.phase === "off" ? "Off" : st.phase === "fasting" ? "Fasting" : "Eating";
+  phaseEl.className = "fasting-phase " + st.phase;
+  document.getElementById("fasting-title").textContent = st.enabled
+    ? `⏱ ${st.protocol || "IF"}`
+    : "⏱ Intermittent fasting";
+  if (!st.enabled) {
+    timerEl.textContent = "—";
+    detailEl.textContent = "Enable in Goals to track your eating window.";
+    prog.style.width = "0%";
+  } else {
+    timerEl.textContent = fmtDuration(st.msRemaining);
+    detailEl.textContent = `${st.title} · ${st.detail}`;
+    prog.style.width = `${Math.min(100, st.progress * 100)}%`;
+    prog.style.background = st.phase === "fasting" ? "var(--protein)" : "var(--accent)";
+  }
+  if (fastingTimerId) clearInterval(fastingTimerId);
+  if (st.enabled) {
+    fastingTimerId = setInterval(() => {
+      if (document.getElementById("view-diary")?.classList.contains("active")) {
+        renderFastingCard();
+      }
+    }, 1000);
+  }
+}
+
+function setupFastingButtons() {
+  const endBtn = document.getElementById("fasting-end-meal");
+  const clearBtn = document.getElementById("fasting-clear-meal");
+  if (endBtn) {
+    endBtn.onclick = async () => {
+      await setSettings({ last_meal_ended_at: new Date().toISOString(), fasting_enabled: "1" });
+      settings = await getSettings();
+      toast("Fast started after your meal");
+      renderFastingCard();
+    };
+  }
+  if (clearBtn) {
+    clearBtn.onclick = async () => {
+      await setSettings({ last_meal_ended_at: "" });
+      settings = await getSettings();
+      toast("Using schedule window only");
+      renderFastingCard();
+    };
+  }
+}
+
+function setupRestaurantBuilder() {
+  const sel = document.getElementById("rb-restaurant");
+  if (!sel) return;
+  sel.innerHTML = RESTAURANT_BUILDERS.map(
+    (b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`
+  ).join("");
+  rbState.builderId = RESTAURANT_BUILDERS[0].id;
+  rbState.formatId = RESTAURANT_BUILDERS[0].formats[0].id;
+  rbState.selected = {};
+  sel.onchange = () => {
+    rbState.builderId = sel.value;
+    const b = RESTAURANT_BUILDERS.find((x) => x.id === rbState.builderId);
+    rbState.formatId = b.formats[0].id;
+    rbState.selected = {};
+    renderRestaurantBuilder();
+  };
+  document.getElementById("rb-log-btn").onclick = () => logRestaurantBuild(false);
+  document.getElementById("rb-save-btn").onclick = () => logRestaurantBuild(true);
+  const go = document.getElementById("btn-restaurant-build");
+  if (go) {
+    go.onclick = () => {
+      document.querySelectorAll(".nav-tab").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+      document.querySelector('.nav-tab[data-view="meals"]')?.classList.add("active");
+      document.getElementById("view-meals").classList.add("active");
+      renderRestaurantBuilder();
+      loadMealsView();
+    };
+  }
+  renderRestaurantBuilder();
+}
+
+function getRbBuilder() {
+  return RESTAURANT_BUILDERS.find((b) => b.id === rbState.builderId) || RESTAURANT_BUILDERS[0];
+}
+
+function getRbFormat() {
+  const b = getRbBuilder();
+  return b.formats.find((f) => f.id === rbState.formatId) || b.formats[0];
+}
+
+function renderRestaurantBuilder() {
+  const b = getRbBuilder();
+  const fmtEl = document.getElementById("rb-formats");
+  const groupsEl = document.getElementById("rb-groups");
+  if (!fmtEl || !groupsEl) return;
+
+  fmtEl.innerHTML = b.formats
+    .map(
+      (f) =>
+        `<button type="button" class="pill ${rbState.formatId === f.id ? "active" : ""}" data-f="${f.id}">${escapeHtml(f.label)}</button>`
+    )
+    .join("");
+  fmtEl.querySelectorAll("button").forEach((btn) => {
+    btn.onclick = () => {
+      rbState.formatId = btn.dataset.f;
+      renderRestaurantBuilder();
+    };
+  });
+
+  groupsEl.innerHTML = b.groups
+    .map((g) => {
+      // hide tortilla group unless burrito-like
+      if (g.id === "tortilla") {
+        const fmt = getRbFormat();
+        if (fmt && fmt.tortilla === false) return "";
+      }
+      const cur = rbState.selected[g.id];
+      const opts = g.options
+        .map((o, idx) => {
+          const active = g.multi
+            ? Array.isArray(cur) && cur.includes(o.name)
+            : cur === o.name;
+          return `<button type="button" class="rb-opt ${active ? "active" : ""}" data-g="${g.id}" data-i="${idx}" data-multi="${g.multi ? "1" : "0"}">${escapeHtml(o.name)} <span style="opacity:.7">${Math.round(o.calories)} cal</span></button>`;
+        })
+        .join("");
+      return `<div class="rb-group"><h4>${escapeHtml(g.label)}${g.required ? " *" : ""}${g.multi ? " (multi)" : ""}</h4><div class="rb-opts">${opts}</div></div>`;
+    })
+    .join("");
+
+  groupsEl.querySelectorAll(".rb-opt").forEach((btn) => {
+    btn.onclick = () => {
+      const gid = btn.dataset.g;
+      const idx = Number(btn.dataset.i);
+      const group = b.groups.find((x) => x.id === gid);
+      if (!group) return;
+      const n = group.options[idx]?.name;
+      if (!n) return;
+      const multi = btn.dataset.multi === "1";
+      if (multi) {
+        const arr = Array.isArray(rbState.selected[gid]) ? [...rbState.selected[gid]] : [];
+        const i = arr.indexOf(n);
+        if (i >= 0) arr.splice(i, 1);
+        else arr.push(n);
+        rbState.selected[gid] = arr;
+      } else {
+        rbState.selected[gid] = rbState.selected[gid] === n ? null : n;
+      }
+      renderRestaurantBuilder();
+    };
+  });
+
+  const totals = sumSelection(b, rbState.selected, getRbFormat());
+  document.getElementById("rb-totals").innerHTML = `
+    <div class="macro-chips">${MacroLedgers(totals.protein, totals.carbs, totals.fat, { calories: totals.calories })}</div>
+    <div class="macro-chips" style="margin-top:0.35rem">
+      <span class="chip cal"><span class="chip-l">Na</span> ${formatNum(totals.sodium_mg)}mg</span>
+      <span class="chip carbs"><span class="chip-l">Sugar</span> ${formatNum(totals.sugar_g, 1)}g</span>
+      <span class="chip fiber"><span class="chip-l">Fiber</span> ${formatNum(totals.fiber, 1)}g</span>
+    </div>`;
+}
+
+async function logRestaurantBuild(saveToo) {
+  const b = getRbBuilder();
+  const fmt = getRbFormat();
+  const lines = selectionToLines(b, rbState.selected, fmt);
+  if (!lines.length) {
+    toast("Pick at least one item");
+    return;
+  }
+  const meal = guessMealSlot();
+  for (const line of lines) {
+    await addDiaryEntry({
+      ...line,
+      entry_date: currentDate,
+      meal,
+      source: "restaurant_builder",
+      user_verified: true,
+    });
+  }
+  if (saveToo) {
+    const totals = sumSelection(b, rbState.selected, fmt);
+    await saveMeal({
+      name: `${b.name} ${fmt.label}`,
+      is_recipe: false,
+      meal_type: meal,
+      items: lines,
+      totals,
+    });
+    toast(`Logged & saved ${lines.length} items`);
+  } else {
+    toast(`Logged ${lines.length} items to ${meal}`);
+  }
+  loadDay();
+}
+
+
 async function tryRestoreUserData() {
   // 1) Migrate from old IndexedDB names (rebrand wiped this before)
   try {
@@ -1815,6 +2069,8 @@ async function tryRestoreUserData() {
 // ---- boot ----
 async function boot() {
   setup();
+  setupFastingButtons();
+  setupRestaurantBuilder();
   const themeBtn = document.getElementById("theme-toggle");
   if (themeBtn) themeBtn.addEventListener("click", () => toggleLightDark());
 
@@ -1852,7 +2108,7 @@ async function boot() {
   // Quiet SW updates � do NOT tell users to delete the Home Screen icon
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=9c", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=10", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
@@ -1876,7 +2132,7 @@ async function boot() {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k !== "macroledger-v9c-toggle").map((k) => caches.delete(k))
+        keys.filter((k) => k !== "macroledger-v10-features").map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */

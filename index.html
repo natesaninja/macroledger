@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=9cc" />
+  <link rel="manifest" href="manifest.webmanifest?v=10" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=9cc" />
+  <link rel="stylesheet" href="css/app.css?v=10" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">🔥 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">MacroLedger · sun/moon</span>
+      <span id="app-version" class="app-version">MacroLedger v10 · IF + builder</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -118,7 +118,23 @@
             <div class="stat highlight"><span class="stat-label">Remaining</span><span class="stat-value" id="stat-remaining">—</span></div>
           </div>
           <div class="macro-bars" id="macro-bars"></div>
+          <div class="macro-bars micro-bars" id="micro-bars"></div>
           <div class="density-row" id="density-row"></div>
+        </div>
+
+        <!-- Intermittent fasting -->
+        <div class="fasting-card" id="fasting-card">
+          <div class="fasting-header">
+            <span id="fasting-title">⏱ Intermittent fasting</span>
+            <span class="fasting-phase" id="fasting-phase">Off</span>
+          </div>
+          <div class="fasting-timer" id="fasting-timer">—</div>
+          <div class="fasting-detail" id="fasting-detail">Enable in Goals to track your window.</div>
+          <div class="fasting-bar"><i id="fasting-progress"></i></div>
+          <div class="fasting-actions">
+            <button type="button" class="ghost-btn" id="fasting-end-meal">I just finished eating</button>
+            <button type="button" class="ghost-btn" id="fasting-clear-meal">Clear last meal</button>
+          </div>
         </div>
 
         <!-- One-tap logging strip -->
@@ -127,6 +143,7 @@
           <div class="quick-actions">
             <button type="button" class="chip-btn" id="btn-scan-barcode">📷 Scan barcode</button>
             <button type="button" class="chip-btn" id="btn-voice-log">🎤 Voice / text</button>
+            <button type="button" class="chip-btn" id="btn-restaurant-build">🌮 Restaurant build</button>
             <button type="button" class="chip-btn" id="btn-show-recents">⏱ Recents</button>
             <button type="button" class="chip-btn" id="btn-show-favs">★ Favorites</button>
           </div>
@@ -200,6 +217,23 @@
 
       <section id="view-meals" class="view">
         <h2 class="section-title">Meals &amp; recipes</h2>
+
+        <div class="card" id="restaurant-builder-card">
+          <h3 class="card-title">Restaurant builder</h3>
+          <p class="hint" style="margin-top:0">Build a Chipotle bowl, Chick-fil-A meal, Subway, or Taco Bell order — totals update live.</p>
+          <label>
+            Restaurant
+            <select id="rb-restaurant"></select>
+          </label>
+          <div class="rb-formats" id="rb-formats"></div>
+          <div id="rb-groups"></div>
+          <div class="metabolism-panel" id="rb-totals">Pick items to see macros + sodium/sugar</div>
+          <div class="form-actions" style="margin-top:0.75rem">
+            <button type="button" class="primary-btn" id="rb-log-btn">Log this meal</button>
+            <button type="button" class="ghost-btn" id="rb-save-btn">Save as meal</button>
+          </div>
+        </div>
+
         <div class="card">
           <h3 class="card-title">Recipe builder</h3>
           <p class="hint" style="margin-top:0">Add ingredients → auto nutrition → save as a one-tap meal.</p>
@@ -242,6 +276,8 @@
             <label>Carbs (g)<input name="carbs" type="number" step="0.1" value="0" /></label>
             <label>Fat (g)<input name="fat" type="number" step="0.1" value="0" /></label>
             <label>Fiber (g)<input name="fiber" type="number" step="0.1" value="0" /></label>
+            <label>Sodium (mg)<input name="sodium_mg" type="number" step="1" value="0" /></label>
+            <label>Sugar (g)<input name="sugar_g" type="number" step="0.1" value="0" /></label>
             <div class="span-2 form-actions">
               <button type="submit" class="primary-btn">Save food</button>
             </div>
@@ -309,12 +345,44 @@
             <label>Fat (g)<input name="fat_goal" id="set-fat" type="number" /></label>
             <label>Fiber (g)<input name="fiber_goal" id="set-fiber" type="number" /></label>
             <label>Water<input name="water_goal" id="set-water" type="number" /></label>
+            <label>Sodium (mg)<input name="sodium_goal" id="set-sodium" type="number" step="50" /></label>
+            <label>Sugar (g)<input name="sugar_goal" id="set-sugar" type="number" step="1" /></label>
+            <label class="span-2">Show micronutrients on diary
+              <select name="show_micros" id="set-show-micros">
+                <option value="1">On (sodium + sugar)</option>
+                <option value="0">Off</option>
+              </select>
+            </label>
+
+            <h3 class="card-title span-2">Intermittent fasting</h3>
+            <label>Fasting tracker
+              <select name="fasting_enabled" id="set-fasting-enabled">
+                <option value="0">Off</option>
+                <option value="1">On</option>
+              </select>
+            </label>
+            <label>Protocol
+              <select name="fasting_protocol" id="set-fasting-protocol">
+                <option value="16:8">16:8</option>
+                <option value="18:6">18:6</option>
+                <option value="20:4">20:4</option>
+                <option value="omad">OMAD</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>Eating window starts
+              <input type="time" name="eating_window_start" id="set-eating-start" />
+            </label>
+            <label>Custom eat hours
+              <input type="number" name="custom_eat_hours" id="set-custom-eat" min="1" max="23" step="0.5" value="8" />
+            </label>
+
             <div class="span-2 form-actions">
               <button type="submit" class="primary-btn">Save goals</button>
               <span class="save-hint" id="goals-saved" hidden>Saved ✓</span>
             </div>
           </form>
-          <p class="hint">All data is stored only in this browser / phone. Use Backup on Progress to move to a new device.</p>
+          <p class="hint">All data is stored only in this browser / phone. Use Backup on Progress to move to a new device. Don’t delete the Home Screen icon to update.</p>
         </div>
       </section>
     </main>
@@ -466,6 +534,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=9cc"></script>
+  <script type="module" src="js/app.js?v=10"></script>
 </body>
 </html>

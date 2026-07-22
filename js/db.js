@@ -256,6 +256,14 @@ export const DEFAULT_SETTINGS = {
   fat_goal: "65",
   fiber_goal: "25",
   water_goal: "8",
+  sodium_goal: "2300",
+  sugar_goal: "50",
+  show_micros: "1",
+  fasting_enabled: "0",
+  fasting_protocol: "16:8",
+  eating_window_start: "12:00",
+  custom_eat_hours: "8",
+  last_meal_ended_at: "",
   user_name: "You",
   body_weight_lb: "",
   height_in: "",
@@ -303,6 +311,8 @@ export function goalsFromSettings(s) {
     fat: parseFloat(s.fat_goal) || 65,
     fiber: parseFloat(s.fiber_goal) || 25,
     water: parseInt(s.water_goal, 10) || 8,
+    sodium: parseFloat(s.sodium_goal) || 2300,
+    sugar: parseFloat(s.sugar_goal) || 50,
   };
 }
 
@@ -357,6 +367,7 @@ export async function addFood(food) {
     fat: Number(food.fat) || 0,
     fiber: Number(food.fiber) || 0,
     sodium_mg: Number(food.sodium_mg) || 0,
+    sugar_g: Number(food.sugar_g) || 0,
     barcode: food.barcode || "",
     source: food.source || (food.is_custom !== false ? "custom" : "seed"),
     confidence: food.confidence != null ? Number(food.confidence) : 1,
@@ -439,6 +450,7 @@ export async function addDiaryEntry(entry) {
     fat: Number(entry.fat) || 0,
     fiber: Number(entry.fiber) || 0,
     sodium_mg: Number(entry.sodium_mg) || 0,
+    sugar_g: Number(entry.sugar_g) || 0,
     source: entry.source || "manual",
     confidence: entry.confidence != null ? Number(entry.confidence) : 1,
     user_verified: entry.user_verified !== false,
@@ -461,7 +473,7 @@ export async function updateDiaryServings(id, servings) {
   if (!row) throw new Error("Entry not found");
   const old = row.servings || 1;
   row.servings = servings;
-  for (const k of ["calories", "protein", "carbs", "fat", "fiber", "sodium_mg"]) {
+  for (const k of ["calories", "protein", "carbs", "fat", "fiber", "sodium_mg", "sugar_g"]) {
     row[k] = Math.round(((row[k] || 0) / old) * servings * 100) / 100;
   }
   await dbPut("diary", row);
@@ -669,8 +681,9 @@ function foodRowFromTuple(f, source = "seed") {
     protein: f[4],
     carbs: f[5],
     fat: f[6],
-    fiber: f[7],
-    sodium_mg: 0,
+    fiber: f[7] || 0,
+    sodium_mg: f[8] != null ? f[8] : 0,
+    sugar_g: f[9] != null ? f[9] : 0,
     barcode: "",
     source,
     confidence: 1,
