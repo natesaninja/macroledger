@@ -1,5 +1,5 @@
-/* MacroLedger service worker — network-first so iPhone gets updates */
-const CACHE = "macroledger-v9c-toggle";
+/* MacroLedger service worker */
+const CACHE = "macroledger-v10-features";
 const ASSETS = [
   "./",
   "./index.html",
@@ -13,6 +13,8 @@ const ASSETS = [
   "./js/onboarding.js",
   "./js/barcode-scan.js",
   "./js/persist.js",
+  "./js/fasting.js",
+  "./js/restaurant-builder.js",
   "./js/app.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -20,25 +22,15 @@ const ASSETS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((k) => k !== CACHE)
-            .map((k) => caches.delete(k))
-        )
-      )
-      .then(() => self.clients.claim())
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
 });
 
@@ -49,28 +41,12 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
-
   const url = new URL(req.url);
-
-  // Never cache barcode API / CDN scanner lib
-  if (
-    url.hostname.includes("openfoodfacts.org") ||
-    url.hostname.includes("unpkg.com")
-  ) {
-    event.respondWith(
-      fetch(req).catch(
-        () =>
-          new Response(JSON.stringify({ status: 0 }), {
-            headers: { "Content-Type": "application/json" },
-          })
-      )
-    );
+  if (url.hostname.includes("openfoodfacts.org") || url.hostname.includes("unpkg.com")) {
+    event.respondWith(fetch(req).catch(() => new Response("{}", { headers: { "Content-Type": "application/json" } })));
     return;
   }
-
   if (url.origin !== self.location.origin) return;
-
-  // Network-first for HTML/JS/CSS so renames + scanner updates stick on iOS
   const isShell =
     req.mode === "navigate" ||
     url.pathname.endsWith(".html") ||
@@ -78,9 +54,7 @@ self.addEventListener("fetch", (event) => {
     url.pathname.endsWith(".css") ||
     url.pathname.endsWith("manifest.webmanifest") ||
     url.pathname.endsWith("/") ||
-    url.pathname.endsWith("/calorietrack") ||
-    url.pathname.endsWith("/calorietrack/");
-
+    url.pathname.includes("/macroledger");
   if (isShell) {
     event.respondWith(
       fetch(req)
@@ -95,7 +69,6 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-
   event.respondWith(
     caches.match(req).then((cached) => {
       const fetched = fetch(req)
