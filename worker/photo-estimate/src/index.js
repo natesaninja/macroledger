@@ -1,16 +1,16 @@
 /**
- * MacroLedger free photo → macros proxy (Cloudflare Worker)
+ * MacroLedger photo → macros proxy (Cloudflare Worker)
  *
- * Secrets: GEMINI_API_KEY
- * Optional vars: MODEL, PER_IP_DAILY, GLOBAL_DAILY
+ * Default: Cloudflare Workers AI (no user keys — ready for non-tech users)
+ * Optional: GEMINI_API_KEY secret as fallback
  *
  * Deploy:
  *   cd worker/photo-estimate
- *   npx wrangler secret put GEMINI_API_KEY
  *   npx wrangler deploy
  */
 
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_WORKERS_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
 const DEFAULT_PER_IP = 5;
 const DEFAULT_GLOBAL = 400;
 
@@ -69,7 +69,6 @@ function clientIp(request) {
   );
 }
 
-/** Cache API rate counters (no KV writes required). */
 async function getCount(cache, keyUrl) {
   const hit = await cache.match(keyUrl);
   if (!hit) return 0;
@@ -78,7 +77,6 @@ async function getCount(cache, keyUrl) {
 }
 
 async function setCount(cache, keyUrl, n) {
-  // ~26h TTL so counters reset next calendar day roughly
   await cache.put(
     keyUrl,
     new Response(String(n), {
@@ -110,7 +108,7 @@ async function checkAndBumpLimits(env, request) {
       ok: false,
       status: 429,
       body: {
-        error: `Free limit for this device: ${perIp} photo scans/day. Try again tomorrow.`,
+        error: `You've used today's free photo scans (${perIp}). Try again tomorrow — barcode and voice still work.`,
         code: "ip_limit",
         remaining: 0,
       },
@@ -121,7 +119,7 @@ async function checkAndBumpLimits(env, request) {
       ok: false,
       status: 429,
       body: {
-        error: "Shared free photo scans are used up for today. Try again tomorrow.",
+        error: "Free photo scans are paused until tomorrow. You can still use barcode, search, or voice.",
         code: "global_limit",
         remaining: 0,
       },
@@ -140,20 +138,110 @@ async function checkAndBumpLimits(env, request) {
   };
 }
 
-function parseGeminiJson(text) {
+function parseNutritionJson(text) {
   const cleaned = String(text || "")
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    }
+    throw new Error("parse");
+  }
+}
+
+function base64ToUint8Array(b64) {
+  const pure = String(b64).replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+  const bin = atob(pure);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Cloudflare Workers AI vision — no external API key for users.
+ */
+async function callWorkersAI(env, imageBase64) {
+  if (!env.AI) {
+    return { ok: false, status: 500, body: { error: "Photo AI not available right now.", code: "config" } };
+  }
+  const model = env.WORKERS_AI_MODEL || DEFAULT_WORKERS_MODEL;
+  const image = Array.from(base64ToUint8Array(imageBase64));
+
+  try {
+    const result = await env.AI.run(model, {
+      image,
+      prompt: PROMPT,
+      max_tokens: 1200,
+      temperature: 0.2,
+    });
+
+    const text =
+      (typeof result === "string" && result) ||
+      result?.response ||
+      result?.description ||
+      result?.result ||
+      (Array.isArray(result?.description) ? result.description.join(" ") : "") ||
+      "";
+
+    if (!text) {
+      return {
+        ok: false,
+        status: 502,
+        body: { error: "Could not read that photo. Try better light or a closer shot.", code: "empty" },
+      };
+    }
+
+    try {
+      const parsed = parseNutritionJson(text);
+      return { ok: true, parsed, via: "workers_ai" };
+    } catch {
+      // Some vision models return prose — wrap as a single uncertain item
+      return {
+        ok: true,
+        parsed: {
+          items: [
+            {
+              name: String(text).slice(0, 80) || "Meal from photo",
+              portion: "1 serving",
+              calories: 0,
+              protein: 0,
+              carbs: 0,
+              fat: 0,
+              fiber: 0,
+              confidence: 0.3,
+            },
+          ],
+          notes: "Estimate was incomplete — please edit numbers before saving.",
+        },
+        via: "workers_ai_prose",
+      };
+    }
+  } catch (e) {
+    const msg = e?.message || String(e);
+    return {
+      ok: false,
+      status: 502,
+      body: {
+        error: "Photo estimate is busy. Try again in a minute, or use barcode / voice.",
+        code: "workers_ai_error",
+        detail: msg.slice(0, 120),
+      },
+    };
+  }
 }
 
 async function callGemini(env, imageBase64, mimeType) {
   const key = env.GEMINI_API_KEY;
   if (!key) {
-    return { ok: false, status: 500, body: { error: "Server missing GEMINI_API_KEY", code: "config" } };
+    return { ok: false, status: 500, body: { error: "Photo AI not configured.", code: "config" } };
   }
-  const model = env.MODEL || DEFAULT_MODEL;
+  const model = env.GEMINI_MODEL || env.MODEL || DEFAULT_GEMINI_MODEL;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
 
   const res = await fetch(url, {
@@ -167,7 +255,7 @@ async function callGemini(env, imageBase64, mimeType) {
             {
               inline_data: {
                 mime_type: mimeType || "image/jpeg",
-                data: imageBase64,
+                data: String(imageBase64).replace(/^data:image\/[a-zA-Z+]+;base64,/, ""),
               },
             },
           ],
@@ -182,12 +270,14 @@ async function callGemini(env, imageBase64, mimeType) {
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = data?.error?.message || `Gemini error ${res.status}`;
     return {
       ok: false,
       status: res.status === 429 ? 429 : 502,
       body: {
-        error: res.status === 429 ? "AI free quota hit. Try again later today." : msg,
+        error:
+          res.status === 429
+            ? "Free photo limit hit for now. Try later — barcode and voice still work."
+            : "Photo estimate failed. Try again, or use barcode / voice.",
         code: res.status === 429 ? "gemini_limit" : "gemini_error",
       },
     };
@@ -195,19 +285,39 @@ async function callGemini(env, imageBase64, mimeType) {
 
   const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
   if (!text) {
-    return { ok: false, status: 502, body: { error: "Empty AI response", code: "empty" } };
+    return { ok: false, status: 502, body: { error: "Could not read that photo. Try again.", code: "empty" } };
   }
 
   try {
-    const parsed = parseGeminiJson(text);
-    return { ok: true, parsed };
+    return { ok: true, parsed: parseNutritionJson(text), via: "gemini" };
   } catch {
     return {
       ok: false,
       status: 502,
-      body: { error: "Could not parse AI JSON", code: "parse", raw: text.slice(0, 400) },
+      body: { error: "Could not understand the estimate. Try another photo.", code: "parse" },
     };
   }
+}
+
+async function estimate(env, imageBase64, mimeType) {
+  // Prefer Workers AI (zero setup for app users)
+  if (env.AI) {
+    const w = await callWorkersAI(env, imageBase64);
+    if (w.ok) return w;
+    // Fall through to Gemini if configured
+    if (env.GEMINI_API_KEY) {
+      const g = await callGemini(env, imageBase64, mimeType);
+      if (g.ok) return g;
+      return w; // prefer first error if both fail
+    }
+    return w;
+  }
+  if (env.GEMINI_API_KEY) return callGemini(env, imageBase64, mimeType);
+  return {
+    ok: false,
+    status: 500,
+    body: { error: "Photo meal is not available yet. Please try barcode or voice.", code: "config" },
+  };
 }
 
 export default {
@@ -226,6 +336,8 @@ export default {
           ok: true,
           service: "macroledger-photo-estimate",
           free: true,
+          ready: Boolean(env.AI || env.GEMINI_API_KEY),
+          engine: env.AI ? "workers_ai" : env.GEMINI_API_KEY ? "gemini" : "none",
           per_ip_daily: parseInt(env.PER_IP_DAILY || String(DEFAULT_PER_IP), 10),
           global_daily: parseInt(env.GLOBAL_DAILY || String(DEFAULT_GLOBAL), 10),
         },
@@ -235,39 +347,39 @@ export default {
     }
 
     if (request.method !== "POST" || !url.pathname.endsWith("/estimate")) {
-      return json({ error: "POST /estimate with { imageBase64, mimeType }" }, 404, origin);
+      return json({ error: "Not found" }, 404, origin);
     }
 
     let body;
     try {
       body = await request.json();
     } catch {
-      return json({ error: "Invalid JSON body" }, 400, origin);
+      return json({ error: "Something went wrong. Try again." }, 400, origin);
     }
 
     const imageBase64 = body.imageBase64 || body.base64 || "";
     const mimeType = body.mimeType || body.mime_type || "image/jpeg";
     if (!imageBase64 || imageBase64.length < 100) {
-      return json({ error: "imageBase64 required" }, 400, origin);
+      return json({ error: "No photo received. Try taking the picture again." }, 400, origin);
     }
-    // ~4MB base64 guard
     if (imageBase64.length > 5_500_000) {
-      return json({ error: "Image too large. Compress and retry." }, 413, origin);
+      return json({ error: "Photo is too large. Step back a bit and try again." }, 413, origin);
     }
 
     const limits = await checkAndBumpLimits(env, request);
     if (!limits.ok) return json(limits.body, limits.status, origin);
 
-    const gem = await callGemini(env, imageBase64, mimeType);
-    if (!gem.ok) return json(gem.body, gem.status, origin);
+    const result = await estimate(env, imageBase64, mimeType);
+    if (!result.ok) return json(result.body, result.status, origin);
 
-    const items = Array.isArray(gem.parsed?.items) ? gem.parsed.items : [];
+    const items = Array.isArray(result.parsed?.items) ? result.parsed.items : [];
     return json(
       {
         items,
-        notes: gem.parsed?.notes || "",
+        notes: result.parsed?.notes || "",
         remaining: limits.remaining,
         free: true,
+        via: result.via || "unknown",
       },
       200,
       origin

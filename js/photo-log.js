@@ -3,8 +3,9 @@
  * Prefer a shared Cloudflare Worker proxy (multi-user). Optional personal Gemini key in Settings.
  */
 
-/** Default shared proxy (set after you deploy worker/). Empty = not configured. */
-export const DEFAULT_PHOTO_PROXY_URL = "";
+/** Default shared proxy (Cloudflare Worker). Override in Goals if needed. */
+export const DEFAULT_PHOTO_PROXY_URL =
+  "https://macroledger-photo-estimate.macroledger-2103.workers.dev";
 
 /** Per-device free daily cap (client-side; Worker also enforces per IP). */
 export const CLIENT_DAILY_LIMIT = 5;
@@ -62,6 +63,13 @@ function bumpPhotoUsage() {
 export function photoScansRemaining(limit = CLIENT_DAILY_LIMIT) {
   const u = getPhotoUsage();
   return Math.max(0, limit - u.count);
+}
+
+/** True when a proxy URL or personal Gemini key is available. */
+export function isPhotoLogConfigured(settings = {}, defaultProxy = DEFAULT_PHOTO_PROXY_URL) {
+  const proxy = String(settings?.photo_proxy_url || defaultProxy || "").trim();
+  const key = String(settings?.photo_gemini_key || "").trim();
+  return Boolean(proxy || key);
 }
 
 /**
@@ -180,7 +188,7 @@ export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
   const geminiKey = (config.geminiKey || "").trim();
   if (!proxyUrl && !geminiKey) {
     throw new PhotoLogError(
-      "Photo AI is not set up yet. In Goals → Photo food log, paste your free Worker URL (see worker/photo-estimate).",
+      "Photo meal isn’t available right now. Try barcode or voice instead.",
       "not_configured"
     );
   }

@@ -8,14 +8,13 @@ If you still see CalorieTrack, you are on the OLD app. Delete that home screen i
 
 **Look:** Quiet ledger — warm paper theme, Source Serif + IBM Plex Sans, text actions (v15).
 
-## Photo meal log (free + limits)
+## Photo meal (ready for everyone)
 
-Snap a plate → AI estimates calories & macros → review → save. No typing required.
+**No setup for people using the app.** Diary → **Photo meal** → snap a plate → review → Save.
 
-1. Deploy the free proxy: see [`worker/photo-estimate/README.md`](worker/photo-estimate/README.md)
-2. In the app: **Goals → Photo food log → Proxy URL** → paste your Worker URL → Save
-3. Diary → **Photo meal** → take a picture
+Behind the scenes: free Cloudflare Worker + Workers AI.  
+App owner only: deploy [`worker/photo-estimate`](worker/photo-estimate/README.md) once; keep `DEFAULT_PHOTO_PROXY_URL` in `js/photo-log.js` pointed at it.
 
-Limits (defaults): **5 free scans per device/day**, shared global daily cap on the Worker. Barcode, search, and voice still work when the free photo quota is used up.
+Limits: about **5 free photos per day** per device. Barcode / search / voice always work as backup.
 
-Optional solo setup: paste a personal Gemini API key in Goals instead of a proxy (key stays on that phone only — not for sharing with others).
+**Updates** apply automatically when online. Never delete the Home Screen icon to “update” (iPhone can erase diary data).

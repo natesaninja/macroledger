@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=22" />
-  <link rel="icon" href="icons/icon-192.png?v=22" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=22" />
+  <link rel="manifest" href="manifest.webmanifest?v=24" />
+  <link rel="icon" href="icons/icon-192.png?v=24" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=24" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=22" />
+  <link rel="stylesheet" href="css/app.css?v=24" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">Streak 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">v22</span>
+      <span id="app-version" class="app-version">v24</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -76,7 +76,7 @@
         <img
           class="brand-mark"
           id="brand-logo"
-          src="icons/logo-mark-light.png?v=22"
+          src="icons/logo-mark-light.png?v=24"
           width="72"
           height="72"
           alt="MacroLedger"
@@ -192,7 +192,7 @@
           </div>
           <input type="file" id="photo-log-input" accept="image/*" capture="environment" hidden />
           <p class="hint photo-log-hint" id="photo-log-hint" style="margin:0.45rem 0 0">
-            Photograph a plate for free macro estimates (limited each day). Needs internet.
+            Snap your plate — we estimate calories for you. Free, a few times per day. Needs internet.
           </p>
           <div class="quick-rail" id="quick-rail"></div>
         </div>
@@ -253,16 +253,15 @@
             — that is an iOS behavior, not a MacroLedger bug.
           </p>
           <p class="hint">
-            <strong>To update the app:</strong> stay online and tap <strong>Update app</strong> below
-            (or reopen the icon). <strong>Never delete the icon</strong> to force an update.
+            The app updates itself when you’re online. <strong>Never delete the Home Screen icon</strong>
+            to force an update — that can erase your diary on iPhone.
           </p>
           <p class="hint">
-            Export a backup to the <strong>Files</strong> app (or iCloud Drive). That file is the only
-            way to get your profile back after an icon delete or new phone.
+            Save a backup to the <strong>Files</strong> app (or iCloud Drive) if you get a new phone.
           </p>
           <div class="export-buttons">
-            <button type="button" class="primary-btn" id="btn-check-update">Update app</button>
-            <button type="button" class="ghost-btn" id="backup-btn">Save backup file</button>
+            <button type="button" class="ghost-btn" id="btn-check-update">Refresh app</button>
+            <button type="button" class="primary-btn" id="backup-btn">Save backup file</button>
             <label class="ghost-btn export-link" style="cursor:pointer">
               Restore from file
               <input type="file" id="restore-input" accept="application/json,.json" hidden />
@@ -442,26 +441,30 @@
             </label>
             <p class="hint span-2" id="goals-fast-summary" style="margin:0">—</p>
 
-            <h3 class="card-title span-2">Photo food log (free + limits)</h3>
-            <p class="hint span-2" style="margin:0">
-              Free shared photo macros for everyone: deploy <code>worker/photo-estimate</code> (Cloudflare free + Gemini free key as a Worker secret),
-              then paste the Worker URL below. Users never need their own keys.
-              Optional personal Gemini key is only a fallback and may be blocked by the browser — prefer the proxy.
+            <h3 class="card-title span-2">Photo meal</h3>
+            <p class="hint span-2" id="photo-setup-status" style="margin:0">
+              Ready to use — open Diary and tap Photo meal. No setup needed.
             </p>
-            <label class="span-2">Photo proxy URL
-              <input name="photo_proxy_url" id="set-photo-proxy" type="url" placeholder="https://macroledger-photo-estimate.YOUR.workers.dev" autocomplete="off" />
-            </label>
-            <label class="span-2">Personal Gemini key (optional fallback)
-              <input name="photo_gemini_key" id="set-photo-gemini-key" type="password" placeholder="Usually leave blank — use Worker URL" autocomplete="off" />
-            </label>
-            <p class="hint span-2" id="photo-setup-status" style="margin:0">—</p>
+            <!-- Advanced: only for power users / troubleshooting (collapsed) -->
+            <details class="span-2 advanced-details">
+              <summary>Advanced photo options</summary>
+              <p class="hint" style="margin:0.5rem 0">
+                Most people can ignore this. The app already has free photo estimates built in.
+              </p>
+              <label>Custom photo server URL (optional)
+                <input name="photo_proxy_url" id="set-photo-proxy" type="url" placeholder="Leave blank for built-in" autocomplete="off" />
+              </label>
+              <label style="margin-top:0.5rem;display:block">Personal AI key (optional, not required)
+                <input name="photo_gemini_key" id="set-photo-gemini-key" type="password" placeholder="Leave blank" autocomplete="off" />
+              </label>
+            </details>
 
             <div class="span-2 form-actions">
               <button type="submit" class="primary-btn">Save goals</button>
               <span class="save-hint" id="goals-saved" hidden>Saved ✓</span>
             </div>
           </form>
-          <p class="hint">All data is stored only in this browser / phone. Use Backup on Progress to move to a new device. Don’t delete the Home Screen icon to update.</p>
+          <p class="hint">Your diary stays on this phone. Tap <strong>Save backup file</strong> on Progress if you get a new phone. Never delete the Home Screen icon to “update” — the app updates itself when you’re online.</p>
         </div>
       </section>
 
@@ -469,19 +472,16 @@
         <h2 class="section-title">Info</h2>
 
         <div class="card info-card warn-card">
-          <h3 class="card-title">Update the app (keep your data)</h3>
+          <h3 class="card-title">Updates happen automatically</h3>
           <p class="hint" style="margin-top:0">
-            On iPhone, <strong>deleting the Home Screen icon often erases your diary and goals</strong>.
-            That is an iOS behavior — do not remove the icon to “force” a new version.
+            When you’re online, MacroLedger quietly updates itself. You don’t need to look for a version number.
           </p>
-          <ol class="info-steps">
-            <li>Open MacroLedger from the <strong>same</strong> Home Screen icon while online.</li>
-            <li>Tap <strong>Update app</strong> below (or on Progress).</li>
-            <li>If it says an update is ready, confirm reload. Keep the icon — do not delete it.</li>
-            <li>If the app freezes: force-close it, reopen while online, then tap <strong>Update app</strong> again.</li>
-          </ol>
+          <p class="hint">
+            <strong>Important on iPhone:</strong> do <em>not</em> delete the Home Screen icon to update —
+            that can erase your diary. Keep the same icon; just open the app while online.
+          </p>
           <div class="export-buttons" style="margin-top:0.75rem">
-            <button type="button" class="primary-btn" id="btn-check-update-info">Update app</button>
+            <button type="button" class="ghost-btn" id="btn-check-update-info">Refresh app now</button>
           </div>
         </div>
 
@@ -507,36 +507,22 @@
         </div>
 
         <div class="card info-card">
-          <h3 class="card-title">Photo meal — how to log food from a picture</h3>
+          <h3 class="card-title">Photo meal — log food from a picture</h3>
           <p class="hint" style="margin-top:0">
-            Snap a plate; AI estimates calories and macros. No typing required. Needs internet.
-            Free with daily limits (about 5 scans per device/day, plus a shared free pool).
+            No setup. Snap your plate; we estimate calories and macros. Needs internet.
+            Free a few times per day (about 5).
           </p>
-          <h4 class="info-subhead">One-time setup (for everyone to use free shared AI)</h4>
           <ol class="info-steps">
-            <li>Deploy the free Worker in the repo folder <code>worker/photo-estimate</code> (see that README), or ask the app owner for their Worker URL.</li>
-            <li>Open <strong>Goals → Photo food log</strong>.</li>
-            <li>Paste the <strong>Photo proxy URL</strong> (example: <code>https://macroledger-photo-estimate.YOUR.workers.dev</code>).</li>
-            <li>Tap <strong>Save goals</strong>. Status should say the shared proxy is ready.</li>
+            <li>Open the <strong>Diary</strong> tab.</li>
+            <li>Tap <strong>Photo meal</strong>.</li>
+            <li>Take a clear photo of your food (good light helps).</li>
+            <li>Wait a few seconds, then check the list and tap <strong>Save all</strong>.</li>
           </ol>
-          <p class="hint">
-            Optional: a personal Gemini key in Goals is a fallback only and may be blocked by the browser. Prefer the proxy so other people don’t need keys.
-          </p>
-          <h4 class="info-subhead">Log a meal from a photo</h4>
-          <ol class="info-steps">
-            <li>Go to the <strong>Diary</strong> tab.</li>
-            <li>Under Quick log, tap <strong>Photo meal</strong>.</li>
-            <li>Take a clear, top-down photo of the food (good light helps).</li>
-            <li>Wait for “Estimating meal…”</li>
-            <li>On <strong>Review before save</strong>, check each item. Change servings or remove wrong lines.</li>
-            <li>Pick the meal (Breakfast / Lunch / Dinner / Snacks) if needed.</li>
-            <li>Tap <strong>Save all</strong> — the estimates are written into your diary as food entries.</li>
-          </ol>
-          <h4 class="info-subhead">Notes</h4>
+          <h4 class="info-subhead">Tips</h4>
           <ul class="info-bullets">
-            <li>The photo itself is <strong>not stored</strong> in your diary — only the food names and macros you save.</li>
-            <li>Low-confidence items are flagged; adjust servings before saving.</li>
-            <li>If free photo scans run out for the day, barcode, search, and voice still work.</li>
+            <li>We don’t keep your photo — only the foods you save.</li>
+            <li>You can edit any item before saving (recommended).</li>
+            <li>If you run out of free photo scans, use barcode, search, or voice instead.</li>
             <li>Photo meal needs internet. Everything else still works offline.</li>
             <li>Estimates are approximate — good for logging speed, not lab-perfect nutrition.</li>
           </ul>
@@ -550,11 +536,11 @@
           </p>
           <div class="logo-preview-row">
             <figure class="logo-preview">
-              <img src="icons/logo-light.jpg?v=22" alt="MacroLedger light logo" />
+              <img src="icons/logo-light.jpg?v=24" alt="MacroLedger light logo" />
               <figcaption>Light</figcaption>
             </figure>
             <figure class="logo-preview">
-              <img src="icons/logo-dark.jpg?v=22" alt="MacroLedger dark logo" />
+              <img src="icons/logo-dark.jpg?v=24" alt="MacroLedger dark logo" />
               <figcaption>Dark</figcaption>
             </figure>
           </div>
@@ -608,7 +594,7 @@
           <ul class="info-bullets">
             <li>Your food diary and goals are stored <strong>on this phone</strong>, not in a cloud account.</li>
             <li>Save a backup to <strong>Files / iCloud Drive</strong> regularly (this tab or Progress).</li>
-            <li>Updates: <strong>Update app</strong> while online — keep the same icon.</li>
+            <li>Updates happen automatically while online — keep the same icon.</li>
           </ul>
         </div>
       </section>
@@ -772,6 +758,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=22"></script>
+  <script type="module" src="js/app.js?v=24"></script>
 </body>
 </html>

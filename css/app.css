@@ -2344,3 +2344,21 @@ body {
 .micro-bars .macro { min-width: 0; }
 .macro.sodium .bar > i { background: #e8a838; }
 .macro.sugar .bar > i { background: #e85d9a; }
+
+/* Collapsed advanced options (non-tech users never open this) */
+.advanced-details {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated, transparent);
+}
+.advanced-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted, #888);
+  font-size: 0.9rem;
+}
+.advanced-details[open] summary {
+  margin-bottom: 0.5rem;
+}

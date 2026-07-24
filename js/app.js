@@ -53,6 +53,8 @@ import { parseFoodUtterance } from "./nlp-log.js";
 import {
   estimateMealFromPhoto,
   photoScansRemaining,
+  isPhotoLogConfigured,
+  DEFAULT_PHOTO_PROXY_URL,
   CLIENT_DAILY_LIMIT,
   PhotoLogError,
 } from "./photo-log.js";
@@ -140,8 +142,8 @@ function updateBrandLogo(themeId) {
   if (!img) return;
   const light = themeId === "light" || themeId === "ocean";
   const src = light
-    ? "icons/logo-mark-light.png?v=22"
-    : "icons/logo-mark-dark.png?v=22";
+    ? "icons/logo-mark-light.png?v=24"
+    : "icons/logo-mark-dark.png?v=24";
   if (img.getAttribute("src") !== src) img.setAttribute("src", src);
   img.alt = light ? "MacroLedger" : "MacroLedger (dark)";
 }
@@ -1107,19 +1109,18 @@ async function loadGoals() {
 
 function updatePhotoLogStatus() {
   const left = photoScansRemaining(CLIENT_DAILY_LIMIT);
-  const proxy = (settings?.photo_proxy_url || "").trim();
-  const key = (settings?.photo_gemini_key || "").trim();
+  const ready = isPhotoLogConfigured(settings || {});
   const status = document.getElementById("photo-setup-status");
   const hint = document.getElementById("photo-log-hint");
-  let mode = "Not set up — add proxy URL or personal Gemini key above";
-  if (proxy) mode = "Shared free proxy ready (others can use without keys)";
-  else if (key) mode = "Personal Gemini key on this device only";
-  const line = `${mode}. Free scans left today: ${left}/${CLIENT_DAILY_LIMIT}.`;
-  if (status) status.textContent = line;
+  if (status) {
+    status.textContent = ready
+      ? `Photo meal is ready. Free scans left today: ${left}/${CLIENT_DAILY_LIMIT}.`
+      : "Photo meal needs internet. Open Diary and try Photo meal when you’re online.";
+  }
   if (hint) {
-    hint.textContent = proxy || key
-      ? `Photograph a plate for free macro estimates (${left} left today). Needs internet.`
-      : "Photograph a plate — set Photo proxy URL in Goals first (free Worker).";
+    hint.textContent = ready
+      ? `Snap your plate — about ${left} free photo${left === 1 ? "" : "s"} left today. Needs internet.`
+      : "Snap your plate when online — free a few times per day.";
   }
 }
 
@@ -1143,7 +1144,7 @@ function showOnboardStep() {
         Restore from backup file
         <input type="file" id="restore-input-onboard" accept="application/json,.json" hidden />
       </label>
-      <p class="hint">On iPhone: <strong>never delete the Home Screen icon to update</strong> — that can erase your data. Use Info → Update app.</p>
+      <p class="hint">On iPhone: <strong>never delete the Home Screen icon to update</strong> — that can erase your data. The app updates itself when online.</p>
       <p>We'll set your goals in under a minute.</p>
       <label>What should we call you?
         <input id="ob-name" value="${escapeHtml(onboardDraft.user_name)}" />
@@ -1324,6 +1325,25 @@ function setupOnboarding() {
 // ---- Photo meal estimate ----
 let photoBusy = false;
 
+async function ensurePhotoLogReady() {
+  if (!settings) settings = await getSettings();
+  if (!navigator.onLine) {
+    toast("Photo meal needs internet. Use barcode or voice while offline.");
+    return false;
+  }
+  if (!isPhotoLogConfigured(settings)) {
+    toast("Photo meal isn’t available right now. Try barcode or voice instead.");
+    return false;
+  }
+  if (photoScansRemaining(CLIENT_DAILY_LIMIT) <= 0) {
+    toast(
+      `You’ve used today’s free photo scans (${CLIENT_DAILY_LIMIT}). Barcode, search & voice still work.`
+    );
+    return false;
+  }
+  return true;
+}
+
 async function runPhotoMealEstimate(file) {
   if (photoBusy) return;
   photoBusy = true;
@@ -1331,10 +1351,14 @@ async function runPhotoMealEstimate(file) {
   if (busy) busy.hidden = false;
   try {
     if (!settings) settings = await getSettings();
+    if (!isPhotoLogConfigured(settings)) {
+      toast("Photo meal isn’t available right now. Try barcode or voice instead.");
+      return;
+    }
     const meal = guessMealSlot();
     document.getElementById("review-meal").value = meal;
     const result = await estimateMealFromPhoto(file, meal, {
-      proxyUrl: settings.photo_proxy_url || "",
+      proxyUrl: settings.photo_proxy_url || undefined,
       geminiKey: settings.photo_gemini_key || "",
       dailyLimit: CLIENT_DAILY_LIMIT,
     });
@@ -1342,21 +1366,16 @@ async function runPhotoMealEstimate(file) {
     updatePhotoLogStatus();
     toast(
       result.remaining != null
-        ? `Estimated ${result.drafts.length} item(s) · ${result.remaining} free scans left today`
-        : `Estimated ${result.drafts.length} item(s) — review & save`
+        ? `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save · ${result.remaining} photos left today`
+        : `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save`
     );
   } catch (err) {
     console.warn("photo log failed", err);
     const msg =
       err instanceof PhotoLogError || err?.message
         ? err.message
-        : "Could not estimate meal from photo";
+        : "Couldn’t estimate that photo. Try again or use barcode / voice.";
     toast(msg);
-    if (err?.code === "not_configured") {
-      // Nudge user toward Goals setup
-      const goalsTab = document.querySelector('.nav-tab[data-view="goals"]');
-      if (goalsTab) setTimeout(() => goalsTab.click(), 600);
-    }
   } finally {
     if (busy) busy.hidden = true;
     photoBusy = false;
@@ -1450,10 +1469,10 @@ function setup() {
   }
   const photoInput = el("photo-log-input");
   if (el("btn-photo-log") && photoInput) {
-    el("btn-photo-log").onclick = () => {
-      if (!navigator.onLine) {
-        return toast("Photo macros need internet. Use barcode or search offline.");
-      }
+    el("btn-photo-log").onclick = async () => {
+      // Check setup BEFORE opening the camera — avoids "photo then dump to Goals"
+      const ready = await ensurePhotoLogReady();
+      if (!ready) return;
       photoInput.value = "";
       photoInput.click();
     };
@@ -1461,6 +1480,9 @@ function setup() {
       const file = photoInput.files && photoInput.files[0];
       photoInput.value = "";
       if (!file) return;
+      // Re-check in case settings changed or quota hit while camera was open
+      const ready = await ensurePhotoLogReady();
+      if (!ready) return;
       await runPhotoMealEstimate(file);
     };
   }
@@ -2410,14 +2432,14 @@ function wireServiceWorkerLifecycle() {
     } catch {
       /* private mode */
     }
-    toast("Update installed — reloading…");
+    // Quiet reload — no version hunting for non-tech users
     setTimeout(() => {
       try {
         window.location.reload();
       } catch {
         /* ignore */
       }
-    }, 400);
+    }, 350);
   });
 }
 
@@ -2442,12 +2464,7 @@ async function checkForAppUpdate({ manual = false } = {}) {
     }
     await reg.update();
     if (reg.waiting) {
-      try {
-        sessionStorage.setItem(SW_RELOAD_KEY, "0"); // allow one reload for this update
-      } catch {
-        /* ok */
-      }
-      reg.waiting.postMessage("SKIP_WAITING");
+      applyWaitingServiceWorker(reg, { quiet: !manual });
       if (manual) toast("Update found — applying…");
       return;
     }
@@ -2456,16 +2473,26 @@ async function checkForAppUpdate({ manual = false } = {}) {
       return;
     }
     if (manual) {
-      toast("You’re on the latest version");
-      // Soft reload can still pick up HTML/CSS if SW was stuck
-      if (confirm("Reload the app now to refresh the screen?")) {
-        window.location.reload();
-      }
+      toast("You’re up to date");
+      window.location.reload();
     }
   } catch (e) {
     console.warn("update check failed", e);
     if (manual) toast("Update check failed — try again online");
   }
+}
+
+function applyWaitingServiceWorker(reg, { quiet = true } = {}) {
+  if (!reg?.waiting) return false;
+  try {
+    // Allow one controllerchange reload for this update
+    sessionStorage.setItem(SW_RELOAD_KEY, "0");
+  } catch {
+    /* private mode */
+  }
+  reg.waiting.postMessage("SKIP_WAITING");
+  if (!quiet) toast("Updating…");
+  return true;
 }
 
 async function registerServiceWorker() {
@@ -2476,17 +2503,22 @@ async function registerServiceWorker() {
     swReg = await navigator.serviceWorker.register("./sw-ml.js", {
       updateViaCache: "none",
     });
-    // Check for updates quietly — do NOT skipWaiting unless a new worker is waiting
+    // Quiet auto-update: apply new versions without asking users to hunt for buttons
+    if (swReg.waiting) applyWaitingServiceWorker(swReg);
     swReg.update().catch(() => {});
     swReg.addEventListener("updatefound", () => {
       const nw = swReg.installing;
       if (!nw) return;
       nw.addEventListener("statechange", () => {
         if (nw.state === "installed" && navigator.serviceWorker.controller) {
-          // New version ready — activate on next visit or when user taps Update
-          toast("Update ready — open Info → Update app");
+          applyWaitingServiceWorker(swReg, { quiet: true });
         }
       });
+    });
+    // Recheck when app comes back online or to foreground
+    window.addEventListener("online", () => swReg?.update?.().catch(() => {}));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") swReg?.update?.().catch(() => {});
     });
     console.log("SW registered", swReg.scope);
   } catch (e) {
@@ -2508,7 +2540,7 @@ async function boot() {
     setup();
   } catch (err) {
     console.error("setup failed", err);
-    toast("UI setup issue — try Info → Update app");
+    toast("Something went wrong — close and reopen the app while online");
   }
 
   try {
@@ -2573,7 +2605,7 @@ async function boot() {
     await loadDay();
   } catch (err) {
     console.error("loadDay failed", err);
-    toast("Diary load issue — try Info → Update app, or restore a backup");
+    toast("Couldn’t load your diary — try Restore from file on Progress, or reopen online");
   }
 }
 
