@@ -130,7 +130,20 @@ function applyTheme(themeId) {
   const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
   if (meta && accent) meta.setAttribute("content", accent);
   updateThemeToggleIcon(id);
+  updateBrandLogo(id);
   return id;
+}
+
+/** Light paper themes use blue logo; ink/dark themes use green logo. */
+function updateBrandLogo(themeId) {
+  const img = document.getElementById("brand-logo");
+  if (!img) return;
+  const light = themeId === "light" || themeId === "ocean";
+  const src = light
+    ? "icons/logo-mark-light.png?v=21"
+    : "icons/logo-mark-dark.png?v=21";
+  if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+  img.alt = light ? "MacroLedger" : "MacroLedger (dark)";
 }
 
 function updateThemeToggleIcon(themeId) {

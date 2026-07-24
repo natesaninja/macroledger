@@ -1,5 +1,5 @@
 /* MacroLedger service worker */
-const CACHE = "macroledger-v20";
+const CACHE = "macroledger-v21";
 const ASSETS = [
   "./",
   "./index.html",
@@ -19,6 +19,10 @@ const ASSETS = [
   "./js/app.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./icons/logo-mark-light.png",
+  "./icons/logo-mark-dark.png",
+  "./icons/logo-light.jpg",
+  "./icons/logo-dark.jpg",
 ];
 
 self.addEventListener("install", (event) => {
