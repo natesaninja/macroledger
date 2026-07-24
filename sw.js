@@ -1,5 +1,5 @@
 /* MacroLedger service worker */
-const CACHE = "macroledger-v24";
+const CACHE = "macroledger-v25";
 const ASSETS = [
   "./",
   "./index.html",
@@ -26,21 +26,26 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
+  // Activate ASAP so clients leave old caches (app still guards reload loops).
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).catch(() => {})
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data === "SKIP_WAITING") self.skipWaiting();
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -61,8 +66,10 @@ self.addEventListener("fetch", (event) => {
     url.pathname.endsWith("/") ||
     url.pathname.includes("/macroledger");
   if (isShell) {
+    // Always revalidate shell from network (bypass browser HTTP cache) so
+    // version bumps aren't stuck on max-age=600 GitHub Pages CDN / disk cache.
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then((res) => {
           if (res && res.ok) {
             const clone = res.clone();
@@ -76,7 +83,7 @@ self.addEventListener("fetch", (event) => {
   }
   event.respondWith(
     caches.match(req).then((cached) => {
-      const fetched = fetch(req)
+      const fetched = fetch(req, { cache: "no-store" })
         .then((res) => {
           if (res && res.ok) {
             const clone = res.clone();
