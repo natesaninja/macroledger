@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=18" />
+  <link rel="manifest" href="manifest.webmanifest?v=19" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=18" />
+  <link rel="stylesheet" href="css/app.css?v=19" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -461,6 +461,79 @@
       <section id="view-info" class="view">
         <h2 class="section-title">Info</h2>
 
+        <div class="card info-card warn-card">
+          <h3 class="card-title">Update the app (keep your data)</h3>
+          <p class="hint" style="margin-top:0">
+            On iPhone, <strong>deleting the Home Screen icon often erases your diary and goals</strong>.
+            That is an iOS behavior — do not remove the icon to “force” a new version.
+          </p>
+          <ol class="info-steps">
+            <li>Open MacroLedger from the <strong>same</strong> Home Screen icon while online.</li>
+            <li>Tap <strong>Update app</strong> below (or on Progress).</li>
+            <li>Wait for “Update installed — reloading…” Keep the icon. Do not reinstall.</li>
+          </ol>
+          <div class="export-buttons" style="margin-top:0.75rem">
+            <button type="button" class="primary-btn" id="btn-check-update-info">Update app</button>
+          </div>
+        </div>
+
+        <div class="card info-card">
+          <h3 class="card-title">Save a backup file (important)</h3>
+          <p class="hint" style="margin-top:0">
+            Your data lives only on this phone. A <strong>JSON backup file</strong> is the only way to
+            recover after deleting the icon, clearing Safari data, or getting a new phone.
+          </p>
+          <ol class="info-steps">
+            <li>Tap <strong>Save backup file</strong> below (or Progress → Save backup file).</li>
+            <li>On iPhone, choose <strong>Save to Files</strong> (iCloud Drive or On My iPhone).</li>
+            <li>Keep that file. Do this weekly, and always before a new phone or reset.</li>
+            <li>To bring data back: tap <strong>Restore from file</strong> and pick that JSON file.</li>
+          </ol>
+          <div class="export-buttons" style="margin-top:0.75rem">
+            <button type="button" class="ghost-btn" id="backup-btn-info">Save backup file</button>
+            <label class="ghost-btn export-link" style="cursor:pointer">
+              Restore from file
+              <input type="file" id="restore-input-info" accept="application/json,.json" hidden />
+            </label>
+          </div>
+        </div>
+
+        <div class="card info-card">
+          <h3 class="card-title">Photo meal — how to log food from a picture</h3>
+          <p class="hint" style="margin-top:0">
+            Snap a plate; AI estimates calories and macros. No typing required. Needs internet.
+            Free with daily limits (about 5 scans per device/day, plus a shared free pool).
+          </p>
+          <h4 class="info-subhead">One-time setup (for everyone to use free shared AI)</h4>
+          <ol class="info-steps">
+            <li>Deploy the free Worker in the repo folder <code>worker/photo-estimate</code> (see that README), or ask the app owner for their Worker URL.</li>
+            <li>Open <strong>Goals → Photo food log</strong>.</li>
+            <li>Paste the <strong>Photo proxy URL</strong> (example: <code>https://macroledger-photo-estimate.YOUR.workers.dev</code>).</li>
+            <li>Tap <strong>Save goals</strong>. Status should say the shared proxy is ready.</li>
+          </ol>
+          <p class="hint">
+            Optional: a personal Gemini key in Goals is a fallback only and may be blocked by the browser. Prefer the proxy so other people don’t need keys.
+          </p>
+          <h4 class="info-subhead">Log a meal from a photo</h4>
+          <ol class="info-steps">
+            <li>Go to the <strong>Diary</strong> tab.</li>
+            <li>Under Quick log, tap <strong>Photo meal</strong>.</li>
+            <li>Take a clear, top-down photo of the food (good light helps).</li>
+            <li>Wait for “Estimating meal…”</li>
+            <li>On <strong>Review before save</strong>, check each item. Change servings or remove wrong lines.</li>
+            <li>Pick the meal (Breakfast / Lunch / Dinner / Snacks) if needed.</li>
+            <li>Tap <strong>Save all</strong> — the estimates are written into your diary as food entries.</li>
+          </ol>
+          <h4 class="info-subhead">Notes</h4>
+          <ul class="info-bullets">
+            <li>The photo itself is <strong>not stored</strong> in your diary — only the food names and macros you save.</li>
+            <li>Low-confidence items are flagged; adjust servings before saving.</li>
+            <li>If free photo scans run out for the day, barcode, search, and voice still work.</li>
+            <li>Photo meal needs internet. Everything else still works offline.</li>
+            <li>Estimates are approximate — good for logging speed, not lab-perfect nutrition.</li>
+          </ul>
+        </div>
+
         <div class="card info-card">
           <h3 class="card-title">Add to Home Screen</h3>
           <p class="hint" style="margin-top:0">
@@ -488,6 +561,7 @@
             Tip: install only from this MacroLedger URL. If you still have an old CalorieTrack icon,
             <strong>export a backup first</strong>, then remove the old icon — deleting icons can wipe site data.
           </p>
+          <button type="button" class="primary-btn" id="info-show-ios-steps" style="margin-top:0.5rem">Show short iPhone steps</button>
         </div>
 
         <div class="card info-card">
@@ -503,40 +577,13 @@
           </p>
         </div>
 
-        <div class="card info-card warn-card">
-          <h3 class="card-title">Do not delete the Home Screen icon</h3>
-          <p class="hint" style="margin-top:0">
-            On iPhone, removing the MacroLedger icon often <strong>wipes your diary and goals</strong>
-            for this site. You then have to set everything up again unless you have a backup file.
-          </p>
-          <ul class="info-bullets">
-            <li><strong>To get a new version:</strong> open the app while online → <strong>Update app</strong> below. Wait for “reloading…”</li>
-            <li><strong>Do not</strong> delete the icon and re-add it just to update.</li>
-            <li><strong>Before</strong> a new phone, factory reset, or clearing Safari data: <strong>Save backup file</strong>.</li>
-          </ul>
-          <div class="export-buttons" style="margin-top:0.75rem">
-            <button type="button" class="primary-btn" id="btn-check-update-info">Update app</button>
-            <button type="button" class="ghost-btn" id="backup-btn-info">Save backup file</button>
-            <label class="ghost-btn export-link" style="cursor:pointer">
-              Restore from file
-              <input type="file" id="restore-input-info" accept="application/json,.json" hidden />
-            </label>
-          </div>
-        </div>
-
         <div class="card info-card">
           <h3 class="card-title">After installing</h3>
           <ul class="info-bullets">
             <li>Your food diary and goals are stored <strong>on this phone</strong>, not in a cloud account.</li>
-            <li>Save a backup to <strong>Files / iCloud Drive</strong> regularly (Progress or this tab).</li>
-            <li>Updates load while you’re online — use <strong>Update app</strong>, then keep the same icon.</li>
+            <li>Save a backup to <strong>Files / iCloud Drive</strong> regularly (this tab or Progress).</li>
+            <li>Updates: <strong>Update app</strong> while online — keep the same icon.</li>
           </ul>
-        </div>
-
-        <div class="card info-card">
-          <h3 class="card-title">Need the steps again?</h3>
-          <p class="hint" style="margin-top:0">You can also open the short iPhone coach from the install banner when it appears.</p>
-          <button type="button" class="primary-btn" id="info-show-ios-steps">Show iPhone steps</button>
         </div>
       </section>
     </main>
@@ -699,6 +746,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=18"></script>
+  <script type="module" src="js/app.js?v=19"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@ const LS_KEY = "ml_autosave_v1";
 const LS_PROFILE_KEY = "ml_profile_v1";
 const LS_FILE_BACKUP_AT = "ml_file_backup_at";
 /** App shell cache name — client must not delete this (see app boot). */
-export const APP_CACHE = "macroledger-v18";
+export const APP_CACHE = "macroledger-v19";
 
 let saveTimer = null;
 

@@ -2429,7 +2429,7 @@ async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   wireServiceWorkerLifecycle();
   try {
-    swReg = await navigator.serviceWorker.register(`./sw-ml.js?v=18`, {
+    swReg = await navigator.serviceWorker.register(`./sw-ml.js?v=19`, {
       updateViaCache: "none",
     });
     swReg.update().catch(() => {});

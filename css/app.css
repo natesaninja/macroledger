@@ -2100,6 +2100,21 @@ select:focus {
 .warn-card .card-title {
   color: var(--text);
 }
+.info-subhead {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--font);
+}
+.info-card code {
+  font-size: 0.78rem;
+  word-break: break-all;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
 /* Safe areas for notched iPhones */
 body {
   padding-top: env(safe-area-inset-top);
