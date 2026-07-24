@@ -140,8 +140,8 @@ function updateBrandLogo(themeId) {
   if (!img) return;
   const light = themeId === "light" || themeId === "ocean";
   const src = light
-    ? "icons/logo-mark-light.png?v=21"
-    : "icons/logo-mark-dark.png?v=21";
+    ? "icons/logo-mark-light.png?v=22"
+    : "icons/logo-mark-dark.png?v=22";
   if (img.getAttribute("src") !== src) img.setAttribute("src", src);
   img.alt = light ? "MacroLedger" : "MacroLedger (dark)";
 }
