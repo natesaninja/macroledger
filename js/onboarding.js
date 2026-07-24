@@ -84,6 +84,7 @@ export async function completeOnboarding(draft, suggestion) {
     protein_goal: String(suggestion.suggested_macros.protein),
     carbs_goal: String(suggestion.suggested_macros.carbs),
     fat_goal: String(suggestion.suggested_macros.fat),
+    targets_confirmed: "1",
     onboarding_complete: "1",
     adaptive_enabled: "1",
   });
@@ -99,4 +100,41 @@ export async function needsOnboarding() {
     return false;
   }
   return true;
+}
+
+/**
+ * If the user has body stats but is still on the factory 2000-cal default,
+ * compute and save personalized targets once. Fixes devices that skipped
+ * onboarding or hit the old "Apply suggested" bug.
+ * Respects targets_confirmed so intentional 2000 is never re-overwritten.
+ */
+export async function ensurePersonalizedCalorieGoal() {
+  const s = await getSettings();
+  if (s.targets_confirmed === "1") {
+    return { applied: false, reason: "confirmed" };
+  }
+  const weight = String(s.body_weight_lb || "").trim();
+  if (!weight) return { applied: false, reason: "no_weight" };
+  const cal = String(s.calorie_goal || "").trim();
+  if (cal && cal !== "2000") {
+    // Custom number already — mark confirmed so we don't keep rechecking
+    await setSettings({ targets_confirmed: "1" });
+    return { applied: false, reason: "already_custom" };
+  }
+
+  const meta = await metabolismFromSettings(s);
+  if (!meta?.target_calories) return { applied: false, reason: "no_meta" };
+
+  await setSettings({
+    calorie_goal: String(meta.target_calories),
+    protein_goal: String(meta.suggested_macros.protein),
+    carbs_goal: String(meta.suggested_macros.carbs),
+    fat_goal: String(meta.suggested_macros.fat),
+    targets_confirmed: "1",
+  });
+  return {
+    applied: true,
+    target_calories: meta.target_calories,
+    from: 2000,
+  };
 }

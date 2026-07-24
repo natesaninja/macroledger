@@ -48,6 +48,7 @@ import {
   needsOnboarding,
   computeOnboardingSuggestion,
   completeOnboarding,
+  ensurePersonalizedCalorieGoal,
 } from "./onboarding.js";
 import { parseFoodUtterance } from "./nlp-log.js";
 import {
@@ -142,8 +143,8 @@ function updateBrandLogo(themeId) {
   if (!img) return;
   const light = themeId === "light" || themeId === "ocean";
   const src = light
-    ? "icons/logo-mark-light.png?v=25"
-    : "icons/logo-mark-dark.png?v=25";
+    ? "icons/logo-mark-light.png?v=26"
+    : "icons/logo-mark-dark.png?v=26";
   if (img.getAttribute("src") !== src) img.setAttribute("src", src);
   img.alt = light ? "MacroLedger" : "MacroLedger (dark)";
 }
@@ -1809,6 +1810,7 @@ function setup() {
     if (!String(partial.photo_gemini_key || "").trim()) {
       delete partial.photo_gemini_key;
     }
+    partial.targets_confirmed = "1";
     await setSettings(partial);
     document.getElementById("goals-saved").hidden = false;
     setTimeout(() => {
@@ -1819,16 +1821,28 @@ function setup() {
     loadDay();
   };
   document.getElementById("apply-suggested-btn").onclick = async () => {
+    // Save current form profile fields first (weight/activity etc.)
     const fd = new FormData(document.getElementById("goals-form"));
-    await setSettings(Object.fromEntries(fd.entries()));
+    const partial = Object.fromEntries(fd.entries());
+    if (!String(partial.photo_gemini_key || "").trim()) {
+      delete partial.photo_gemini_key;
+    }
+    await setSettings(partial);
     const meta = await metabolismFromSettings(await getSettings());
-    if (!meta) return toast("Set weight first");
-    document.getElementById("set-calorie").value = meta.target_calories;
-    document.getElementById("set-protein").value = meta.suggested_macros.protein;
-    document.getElementById("set-carbs").value = meta.suggested_macros.carbs;
-    document.getElementById("set-fat").value = meta.suggested_macros.fat;
+    if (!meta) return toast("Set your weight first, then try again");
+    // Persist targets immediately — old code only filled the form then
+    // loadGoals() wiped them back to the previous (often 2000) values.
+    await setSettings({
+      calorie_goal: String(meta.target_calories),
+      protein_goal: String(meta.suggested_macros.protein),
+      carbs_goal: String(meta.suggested_macros.carbs),
+      fat_goal: String(meta.suggested_macros.fat),
+      targets_confirmed: "1",
+    });
+    settings = await getSettings();
     await loadGoals();
-    toast("Suggested goals filled � Save goals");
+    loadDay();
+    toast(`Goals set to ${meta.target_calories} cal (from your profile)`);
   };
   document.getElementById("apply-adaptive-btn").onclick = async () => {
     const prop = await proposeAdaptiveTargets();
@@ -2584,7 +2598,21 @@ async function boot() {
       onboardStep = 0;
       showOnboardStep();
     } else {
+      // Upgrade stuck 2000-cal defaults when profile weight already exists
+      try {
+        const upgraded = await ensurePersonalizedCalorieGoal();
+        if (upgraded.applied) {
+          setTimeout(() => {
+            toast(
+              `Calorie goal updated to ${upgraded.target_calories} (from your weight & activity)`
+            );
+          }, 800);
+        }
+      } catch (e) {
+        console.warn("calorie personalize failed", e);
+      }
       const s = await getSettings();
+      settings = s;
       saveProfileBackup(s);
       scheduleFullBackup(exportAllJson);
       const days = daysSinceFileBackup();

@@ -275,6 +275,8 @@ export const DEFAULT_SETTINGS = {
   diet_type: "standard",
   macro_mode: "beginner",
   onboarding_complete: "0",
+  /** Set when user (or auto-personalize) has intentionally set calorie targets */
+  targets_confirmed: "0",
   adaptive_enabled: "1",
   units: "imperial",
   ui_theme: "light",
@@ -289,6 +291,15 @@ export async function getSettings() {
   const s = { ...DEFAULT_SETTINGS };
   for (const r of rows) s[r.key] = r.value;
   return s;
+}
+
+/**
+ * True when calorie target still looks like the factory default and was never
+ * replaced by onboarding / Apply suggested / a manual non-default save.
+ */
+export function looksLikeDefaultCalorieGoal(settings) {
+  const c = String(settings?.calorie_goal ?? "").trim();
+  return c === "" || c === "2000";
 }
 
 export async function setSettings(partial) {
