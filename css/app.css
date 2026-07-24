@@ -29,6 +29,16 @@
   --mono: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --brand-mark-fg: #f7f3ee;
   --brand-mark-bg: #1f7a54;
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --tap: 44px;
+  --app-pad-x: clamp(0.85rem, 3.5vw, 1.25rem);
 }
 
 /* Quiet ink (dark companion) */
@@ -149,17 +159,21 @@
 
 html {
   font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.25s ease, color 0.2s ease;
+  overflow-x: hidden;
 }
 
 button,
@@ -167,6 +181,18 @@ input,
 textarea,
 select {
   font-family: inherit;
+  font-size: inherit;
+}
+
+button,
+.chip-btn,
+.nav-tab,
+.ghost-btn,
+.primary-btn,
+.icon-btn,
+.theme-toggle {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .tabular,
@@ -184,24 +210,33 @@ select {
 .app {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1rem 1rem 3rem;
+  padding: var(--space-3) var(--app-pad-x) var(--space-8);
+  width: 100%;
 }
 
 /* ---- Top bar ---- */
 .topbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1.25rem;
-  padding-top: 0.5rem;
+  column-gap: var(--space-3);
+  row-gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) 0 var(--space-3);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .theme-toggle {
-  min-width: 42px;
-  height: 36px;
-  padding: 0 0.65rem;
+  min-width: 44px;
+  min-height: 40px;
+  height: auto;
+  padding: 0 0.7rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -210,7 +245,7 @@ select {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  margin-left: auto;
+  margin-left: 0;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   box-shadow: none;
   font-size: 0.72rem;
@@ -317,16 +352,19 @@ select {
 
 .nav-tabs {
   display: flex;
-  gap: 0.1rem;
+  gap: 0.05rem;
   background: transparent;
   padding: 0;
   border-radius: 0;
   border: none;
   border-bottom: 1px solid var(--border);
   width: 100%;
+  grid-column: 1 / -1;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
 }
 .nav-tabs::-webkit-scrollbar {
   display: none;
@@ -336,9 +374,9 @@ select {
   border: none;
   background: transparent;
   color: var(--text-muted);
-  padding: 0.55rem 0.55rem;
+  padding: 0.6rem 0.65rem;
   border-radius: 0;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 500;
   cursor: pointer;
   transition: color 0.15s, box-shadow 0.15s;
@@ -346,6 +384,8 @@ select {
   margin-bottom: -1px;
   flex: 0 0 auto;
   white-space: nowrap;
+  min-height: 42px;
+  scroll-snap-align: start;
 }
 
 .nav-tab:hover {
@@ -386,8 +426,9 @@ select {
 .date-bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .date-label {
@@ -409,8 +450,10 @@ select {
 }
 
 .icon-btn {
-  width: 36px;
-  height: 36px;
+  width: var(--tap);
+  height: var(--tap);
+  min-width: var(--tap);
+  min-height: var(--tap);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -421,6 +464,7 @@ select {
   display: grid;
   place-items: center;
   transition: background 0.15s;
+  flex-shrink: 0;
 }
 
 .icon-btn:hover {
@@ -479,23 +523,24 @@ select {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem;
+  padding: var(--space-4) var(--space-5);
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 1rem 1.5rem;
-  margin-bottom: 0.85rem;
+  gap: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-3);
   box-shadow: var(--shadow);
+  align-items: center;
 }
 
 .ring-wrap {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: clamp(100px, 28vw, 120px);
+  height: clamp(100px, 28vw, 120px);
 }
 
 .ring {
-  width: 120px;
-  height: 120px;
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg);
 }
 
@@ -531,7 +576,7 @@ select {
 
 .ring-value {
   font-family: var(--font-display);
-  font-size: 1.55rem;
+  font-size: clamp(1.25rem, 4.5vw, 1.55rem);
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.05;
@@ -820,8 +865,16 @@ select {
   align-items: center;
   justify-content: space-between;
   padding: 0.85rem 1rem;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
   border-bottom: 1px solid transparent;
+  flex-wrap: wrap;
+}
+
+.meal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
 }
 
 .meal-card:has(.meal-entries:not(:empty)) .meal-header {
@@ -849,8 +902,10 @@ select {
   border: none;
   background: var(--accent-dim);
   color: var(--accent);
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border-radius: 8px;
   font-size: 1.25rem;
   line-height: 1;
@@ -860,7 +915,7 @@ select {
 }
 
 .add-meal-btn:hover {
-  background: rgba(0, 196, 122, 0.28);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .meal-entries {
@@ -879,9 +934,9 @@ select {
 .entry {
   display: grid;
   grid-template-columns: 1fr auto auto;
-  gap: 0.5rem 0.75rem;
-  align-items: center;
-  padding: 0.65rem 1rem;
+  gap: 0.45rem 0.65rem;
+  align-items: start;
+  padding: 0.7rem 1rem;
   transition: background 0.1s;
 }
 
@@ -1612,9 +1667,41 @@ select:focus {
 
 /* ---- Responsive ---- */
 @media (max-width: 560px) {
+  .app {
+    padding-top: var(--space-2);
+  }
+
+  .topbar {
+    margin-left: calc(-1 * var(--app-pad-x));
+    margin-right: calc(-1 * var(--app-pad-x));
+    padding-left: var(--app-pad-x);
+    padding-right: var(--app-pad-x);
+    margin-bottom: var(--space-3);
+  }
+
+  .brand-name {
+    font-size: 1.1rem;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    font-size: 1.05rem;
+  }
+
   .summary-card {
     grid-template-columns: 1fr;
-    justify-items: center;
+    justify-items: stretch;
+    text-align: left;
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .ring-wrap {
+    justify-self: center;
+  }
+
+  .ring-center {
     text-align: center;
   }
 
@@ -1622,8 +1709,13 @@ select:focus {
     width: 100%;
   }
 
+  .stat {
+    padding-bottom: 0.5rem;
+  }
+
   .macro-bars {
     grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
   }
 
   .nav-tabs {
@@ -1633,8 +1725,14 @@ select:focus {
 
   .nav-tab {
     flex: 0 0 auto;
-    padding: 0.45rem 0.5rem;
-    font-size: 0.76rem;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .date-label {
+    font-size: 1.1rem;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .form-grid {
@@ -1647,20 +1745,161 @@ select:focus {
 
   .entry {
     grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+
+  .entry-cals {
+    grid-column: 2;
+    grid-row: 1;
+    padding-top: 0.1rem;
   }
 
   .entry-actions {
-    grid-column: 2;
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    margin-top: 0.15rem;
+  }
+
+  .meal-header {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .meal-cal {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+    order: 3;
+  }
+
+  .meal-title {
+    order: 1;
+  }
+
+  .meal-actions {
+    order: 2;
+  }
+
+  .quick-actions {
+    gap: 0.45rem;
+  }
+
+  .chip-btn {
+    min-height: var(--tap);
+    padding: 0.5rem 0.8rem;
+  }
+
+  .ghost-btn {
+    min-height: 40px;
+  }
+
+  .primary-btn {
+    min-height: var(--tap);
+  }
+
+  .toolbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .toolbar-row .ghost-btn {
+    flex: 1 1 auto;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .fasting-actions .ghost-btn,
+  .fasting-quick-row {
+    width: 100%;
+  }
+
+  .fasting-inline {
+    flex: 1 1 140px;
+  }
+
+  .fasting-inline select,
+  .fasting-inline input {
+    min-height: 40px;
+  }
+
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(92dvh, 100%);
+    border-radius: 16px 16px 0 0;
+    margin: 0;
+  }
+
+  .modal-body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    max-height: calc(92dvh - 4rem);
+  }
+
+  .toast {
+    left: var(--app-pad-x);
+    right: var(--app-pad-x);
+    transform: none;
+    width: auto;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    text-align: center;
+  }
+
+  .status-bar {
+    font-size: 0.72rem;
+    gap: 0.4rem;
+    margin-bottom: var(--space-2);
+  }
+
+  .install-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .install-banner-actions {
+    width: 100%;
+  }
+
+  .install-banner-actions .primary-btn,
+  .install-banner-actions .ghost-btn {
+    flex: 1;
+  }
+}
+
+@media (min-width: 561px) and (max-width: 720px) {
+  .summary-card {
+    gap: var(--space-4);
   }
 }
 
 @media (min-width: 640px) {
   .modal-backdrop {
     align-items: center;
+    padding: 1rem;
   }
 
   .modal {
-    border-radius: 18px;
+    border-radius: 16px;
+    width: min(480px, 100%);
+  }
+}
+
+@media (min-width: 721px) {
+  .app {
+    padding-top: var(--space-5);
+  }
+
+  .topbar {
+    border-bottom-color: transparent;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    position: static;
   }
 }
 
@@ -1668,7 +1907,7 @@ select:focus {
 .install-banner {
   display: none;
   background: var(--accent-dim);
-  border: 1px solid rgba(0,196,122,0.35);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   border-radius: var(--radius);
   padding: 0.85rem 1rem;
   margin-bottom: 1rem;
@@ -1686,6 +1925,7 @@ select:focus {
 .status-bar {
   font-size: 0.75rem; color: var(--text-muted);
   display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;
+  min-height: 1.25rem;
 }
 .app-version {
   display: none; /* quiet ledger: hide build chrome */
@@ -1864,9 +2104,20 @@ body {
 }
 /* Larger tap targets on touch */
 @media (pointer: coarse) {
-  .nav-tab { min-height: 40px; }
-  .chip-btn, .add-meal-btn, .primary-btn { min-height: 44px; }
-  .entry-actions button { min-width: 36px; min-height: 36px; }
+  .nav-tab { min-height: 44px; }
+  .chip-btn, .add-meal-btn, .primary-btn, .ghost-btn { min-height: 44px; }
+  .entry-actions button {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.75rem;
+  }
+  .theme-toggle { min-height: 44px; }
+  input, select, textarea {
+    min-height: 44px;
+    font-size: 16px; /* prevents iOS zoom on focus */
+  }
+  textarea { min-height: 88px; }
 }
 
 /* Barcode scanner (ZXing + digital zoom) */
