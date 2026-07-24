@@ -1,13 +1,18 @@
 /**
- * Autosave so profile + diary survive app updates.
+ * Autosave so profile + diary survive app *code* updates.
  * - IndexedDB is primary
  * - localStorage mirror recovers if the IDB name was renamed or wiped
  *
- * IMPORTANT: Do NOT delete the Home Screen icon to "update" — that can erase data on iPhone.
+ * CRITICAL (iPhone): Deleting the Home Screen icon often erases IndexedDB AND
+ * localStorage for this site. Never delete the icon to "update" — use Info → Update app.
+ * Keep a JSON backup in the Files app for phone switches.
  */
 
 const LS_KEY = "ml_autosave_v1";
 const LS_PROFILE_KEY = "ml_profile_v1";
+const LS_FILE_BACKUP_AT = "ml_file_backup_at";
+/** App shell cache name — client must not delete this (see app boot). */
+export const APP_CACHE = "macroledger-v18";
 
 let saveTimer = null;
 
@@ -72,4 +77,29 @@ export function clearLocalBackups() {
   } catch {
     /* ok */
   }
+}
+
+export function markFileBackupSaved() {
+  try {
+    localStorage.setItem(LS_FILE_BACKUP_AT, new Date().toISOString());
+  } catch {
+    /* ok */
+  }
+}
+
+export function daysSinceFileBackup() {
+  try {
+    const raw = localStorage.getItem(LS_FILE_BACKUP_AT);
+    if (!raw) return Infinity;
+    const t = Date.parse(raw);
+    if (!Number.isFinite(t)) return Infinity;
+    return (Date.now() - t) / (1000 * 60 * 60 * 24);
+  } catch {
+    return Infinity;
+  }
+}
+
+/** True when local mirrors exist (survives some IDB glitches, not Home Screen delete). */
+export function hasLocalMirror() {
+  return !!(loadLocalBackup() || loadProfileBackup());
 }

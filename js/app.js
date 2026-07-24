@@ -76,6 +76,9 @@ import {
   loadProfileBackup,
   saveProfileBackup,
   scheduleFullBackup,
+  markFileBackupSaved,
+  daysSinceFileBackup,
+  APP_CACHE,
 } from "./persist.js";
 
 const MEALS = [
@@ -1121,11 +1124,37 @@ function showOnboardStep() {
   const el = document.getElementById("onboard-step");
   if (step === "welcome") {
     el.innerHTML = `<h2>Welcome to MacroLedger</h2>
-      <p>Privacy-first calorie &amp; macro tracking. Your diary stays <strong>on this device</strong> unless you export a backup.</p>
+      <p>Privacy-first calorie &amp; macro tracking. Your diary stays <strong>on this device</strong>.</p>
+      <p class="hint" style="margin:0.5rem 0"><strong>Already used MacroLedger?</strong> Restore a backup file instead of starting over.</p>
+      <label class="ghost-btn export-link" style="cursor:pointer;display:inline-flex;margin-bottom:0.75rem">
+        Restore from backup file
+        <input type="file" id="restore-input-onboard" accept="application/json,.json" hidden />
+      </label>
+      <p class="hint">On iPhone: <strong>never delete the Home Screen icon to update</strong> — that can erase your data. Use Info → Update app.</p>
       <p>We'll set your goals in under a minute.</p>
       <label>What should we call you?
         <input id="ob-name" value="${escapeHtml(onboardDraft.user_name)}" />
       </label>`;
+    const obRestore = document.getElementById("restore-input-onboard");
+    if (obRestore) {
+      obRestore.onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!confirm("Replace ALL data on this device with the backup?")) return;
+        try {
+          const data = JSON.parse(await file.text());
+          await importAllJson(data);
+          markFileBackupSaved();
+          scheduleFullBackup(exportAllJson);
+          document.getElementById("onboard").hidden = true;
+          toast("Restored from backup file");
+          loadDay();
+        } catch (err) {
+          toast("Restore failed: " + err.message);
+        }
+        e.target.value = "";
+      };
+    }
   } else if (step === "goal") {
     el.innerHTML = `<h2>What's your goal?</h2>
       <div class="choice-grid three" id="ob-goal">
@@ -1777,31 +1806,79 @@ function setup() {
     showOnboardStep();
   };
 
-  // backup
+  // backup — save a file you keep (Files / iCloud). Home Screen delete can wipe on-device data.
   async function doBackup() {
-    const data = await exportAllJson();
-    downloadBlob(
-      `MacroLedger-backup-${todayISO()}.json`,
-      new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
-    );
-    toast("Backup downloaded");
+    try {
+      const data = await exportAllJson();
+      const name = `MacroLedger-backup-${todayISO()}.json`;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const file = new File([blob], name, { type: "application/json" });
+      // iPhone: Share → Save to Files is more reliable than a silent download
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: "MacroLedger backup",
+          text: "Save this file. Restoring it brings back your profile and diary.",
+        });
+      } else {
+        downloadBlob(name, blob);
+      }
+      markFileBackupSaved();
+      scheduleFullBackup(exportAllJson);
+      toast("Backup saved — keep this file safe");
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      try {
+        const data = await exportAllJson();
+        downloadBlob(
+          `MacroLedger-backup-${todayISO()}.json`,
+          new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+        );
+        markFileBackupSaved();
+        toast("Backup downloaded");
+      } catch (e2) {
+        toast("Backup failed: " + (e2.message || "unknown"));
+      }
+    }
   }
-  document.getElementById("export-json-btn").onclick = doBackup;
-  document.getElementById("backup-btn").onclick = doBackup;
-  document.getElementById("restore-input").onchange = async (e) => {
-    const file = e.target.files?.[0];
+  async function restoreFromFile(file) {
     if (!file) return;
     if (!confirm("Replace ALL data on this device with the backup?")) return;
     try {
       const data = JSON.parse(await file.text());
       await importAllJson(data);
-      toast("Restored");
+      markFileBackupSaved();
+      scheduleFullBackup(exportAllJson);
+      toast("Restored from backup file");
+      document.getElementById("onboard").hidden = true;
       loadDay();
-      loadProgress();
+      if (document.getElementById("view-progress")?.classList.contains("active")) loadProgress();
     } catch (err) {
       toast("Restore failed: " + err.message);
     }
+  }
+  document.getElementById("export-json-btn").onclick = doBackup;
+  document.getElementById("backup-btn").onclick = doBackup;
+  const backupBtn2 = document.getElementById("backup-btn-info");
+  if (backupBtn2) backupBtn2.onclick = doBackup;
+  document.getElementById("restore-input").onchange = async (e) => {
+    await restoreFromFile(e.target.files?.[0]);
+    e.target.value = "";
   };
+  const restoreInput2 = document.getElementById("restore-input-info");
+  if (restoreInput2) {
+    restoreInput2.onchange = async (e) => {
+      await restoreFromFile(e.target.files?.[0]);
+      e.target.value = "";
+    };
+  }
+  const restoreOnboard = document.getElementById("restore-input-onboard");
+  if (restoreOnboard) {
+    restoreOnboard.onchange = async (e) => {
+      await restoreFromFile(e.target.files?.[0]);
+      e.target.value = "";
+    };
+  }
   document.getElementById("export-csv-btn").onclick = async () => {
     const all = await (await import("./db.js")).dbGetAll("diary");
     const lines = [
@@ -1841,6 +1918,13 @@ function setup() {
   });
   const infoIosBtn = document.getElementById("info-show-ios-steps");
   if (infoIosBtn) infoIosBtn.onclick = openIosInstallHelp;
+  const updateBtns = [
+    document.getElementById("btn-check-update"),
+    document.getElementById("btn-check-update-info"),
+  ].filter(Boolean);
+  updateBtns.forEach((btn) => {
+    btn.onclick = () => checkForAppUpdate({ manual: true });
+  });
 
   window.addEventListener("beforeinstallprompt", (e) => {
     // Android/desktop Chrome only � still supported, not our focus
@@ -2293,6 +2377,83 @@ async function tryRestoreUserData() {
   return { restored: false };
 }
 
+// ---- App updates (never delete Home Screen icon) ----
+let swRefreshing = false;
+let swReg = null;
+
+function wireServiceWorkerLifecycle() {
+  if (!("serviceWorker" in navigator)) return;
+  // When a new SW takes control, reload once so the new UI appears
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (swRefreshing) return;
+    swRefreshing = true;
+    toast("Update installed — reloading…");
+    setTimeout(() => window.location.reload(), 350);
+  });
+}
+
+async function checkForAppUpdate({ manual = false } = {}) {
+  if (!("serviceWorker" in navigator)) {
+    if (manual) toast("Updates aren’t available in this browser");
+    return;
+  }
+  if (!navigator.onLine) {
+    if (manual) toast("Go online to check for updates");
+    return;
+  }
+  try {
+    if (manual) toast("Checking for updates…");
+    const reg = swReg || (await navigator.serviceWorker.getRegistration()) || null;
+    if (!reg) {
+      if (manual) toast("No service worker yet — reopen the app once online");
+      return;
+    }
+    await reg.update();
+    if (reg.waiting) {
+      reg.waiting.postMessage("SKIP_WAITING");
+      if (manual) toast("Update found — applying…");
+      return;
+    }
+    if (reg.installing) {
+      if (manual) toast("Downloading update…");
+      return;
+    }
+    if (manual) toast("You’re on the latest version");
+  } catch (e) {
+    console.warn("update check failed", e);
+    if (manual) toast("Update check failed — try again online");
+  }
+}
+
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  wireServiceWorkerLifecycle();
+  try {
+    swReg = await navigator.serviceWorker.register(`./sw-ml.js?v=18`, {
+      updateViaCache: "none",
+    });
+    swReg.update().catch(() => {});
+    if (swReg.waiting) swReg.waiting.postMessage("SKIP_WAITING");
+    swReg.addEventListener("updatefound", () => {
+      const nw = swReg.installing;
+      if (!nw) return;
+      nw.addEventListener("statechange", () => {
+        if (nw.state === "installed" && navigator.serviceWorker.controller) {
+          toast("Update ready — applying…");
+          nw.postMessage("SKIP_WAITING");
+        }
+      });
+    });
+    // Periodic check while app is open
+    setInterval(() => {
+      if (navigator.onLine) swReg?.update().catch(() => {});
+    }, 30 * 60 * 1000);
+    console.log("SW registered", swReg.scope);
+  } catch (e) {
+    console.warn("SW failed", e);
+  }
+}
+
 // ---- boot ----
 async function boot() {
   setup();
@@ -2328,36 +2489,26 @@ async function boot() {
     const s = await getSettings();
     saveProfileBackup(s);
     scheduleFullBackup(exportAllJson);
-  }
-
-  // Register SW before heavy UI work so a render bug can't block updates
-  if ("serviceWorker" in navigator) {
-    try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=17", {
-        updateViaCache: "none",
-      });
-      reg.update().catch(() => {});
-      if (reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
-      reg.addEventListener("updatefound", () => {
-        const nw = reg.installing;
-        if (!nw) return;
-        nw.addEventListener("statechange", () => {
-          if (nw.state === "installed" && navigator.serviceWorker.controller) {
-            nw.postMessage("SKIP_WAITING");
-          }
-        });
-      });
-      console.log("SW registered", reg.scope);
-    } catch (e) {
-      console.warn("SW failed", e);
+    // Gentle reminder: only a *file* backup survives deleting the Home Screen icon
+    const days = daysSinceFileBackup();
+    if (days > 7) {
+      setTimeout(() => {
+        toast("Tip: Progress → Export backup (keeps data if icon is removed)");
+      }, 2500);
     }
   }
+
+  // Register SW — do NOT wipe caches here (old bug deleted the live cache every boot)
+  await registerServiceWorker();
 
   if (window.caches) {
     try {
       const keys = await caches.keys();
+      // Only remove unknown/legacy caches; keep current APP_CACHE
       await Promise.all(
-        keys.filter((k) => k !== "macroledger-v13").map((k) => caches.delete(k))
+        keys
+          .filter((k) => k.startsWith("macroledger-") && k !== APP_CACHE)
+          .map((k) => caches.delete(k))
       );
     } catch {
       /* ignore */
@@ -2368,7 +2519,7 @@ async function boot() {
     await loadDay();
   } catch (err) {
     console.error("loadDay failed", err);
-    toast("Diary load issue — try switching tabs or refreshing once");
+    toast("Diary load issue — try Info → Update app, or restore a backup");
   }
 }
 

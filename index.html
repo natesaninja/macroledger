@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=17" />
+  <link rel="manifest" href="manifest.webmanifest?v=18" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=17" />
+  <link rel="stylesheet" href="css/app.css?v=18" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -241,13 +241,23 @@
         <div class="card">
           <h3 class="card-title">Backup &amp; restore</h3>
           <p class="hint" style="margin-top:0">
-            Your profile autosaves on this phone. <strong>Do not delete the Home Screen icon to update</strong>
-            — just reopen the app (updates load automatically). Export a file backup before switching phones.
+            Your diary lives <strong>only on this phone</strong>. On iPhone,
+            <strong>deleting the Home Screen icon can erase all your data</strong>
+            — that is an iOS behavior, not a MacroLedger bug.
+          </p>
+          <p class="hint">
+            <strong>To update the app:</strong> stay online and tap <strong>Update app</strong> below
+            (or reopen the icon). <strong>Never delete the icon</strong> to force an update.
+          </p>
+          <p class="hint">
+            Export a backup to the <strong>Files</strong> app (or iCloud Drive). That file is the only
+            way to get your profile back after an icon delete or new phone.
           </p>
           <div class="export-buttons">
-            <button type="button" class="ghost-btn" id="backup-btn">Export JSON backup</button>
+            <button type="button" class="primary-btn" id="btn-check-update">Update app</button>
+            <button type="button" class="ghost-btn" id="backup-btn">Save backup file</button>
             <label class="ghost-btn export-link" style="cursor:pointer">
-              Restore backup
+              Restore from file
               <input type="file" id="restore-input" accept="application/json,.json" hidden />
             </label>
             <button type="button" class="ghost-btn" id="export-csv-btn">Export diary CSV</button>
@@ -475,7 +485,8 @@
             <li>Open the new icon from your Home Screen — that’s the installed app.</li>
           </ol>
           <p class="hint">
-            Tip: if you already have an old “CalorieTrack” icon, delete it and install only from this MacroLedger URL.
+            Tip: install only from this MacroLedger URL. If you still have an old CalorieTrack icon,
+            <strong>export a backup first</strong>, then remove the old icon — deleting icons can wipe site data.
           </p>
         </div>
 
@@ -492,13 +503,33 @@
           </p>
         </div>
 
+        <div class="card info-card warn-card">
+          <h3 class="card-title">Do not delete the Home Screen icon</h3>
+          <p class="hint" style="margin-top:0">
+            On iPhone, removing the MacroLedger icon often <strong>wipes your diary and goals</strong>
+            for this site. You then have to set everything up again unless you have a backup file.
+          </p>
+          <ul class="info-bullets">
+            <li><strong>To get a new version:</strong> open the app while online → <strong>Update app</strong> below. Wait for “reloading…”</li>
+            <li><strong>Do not</strong> delete the icon and re-add it just to update.</li>
+            <li><strong>Before</strong> a new phone, factory reset, or clearing Safari data: <strong>Save backup file</strong>.</li>
+          </ul>
+          <div class="export-buttons" style="margin-top:0.75rem">
+            <button type="button" class="primary-btn" id="btn-check-update-info">Update app</button>
+            <button type="button" class="ghost-btn" id="backup-btn-info">Save backup file</button>
+            <label class="ghost-btn export-link" style="cursor:pointer">
+              Restore from file
+              <input type="file" id="restore-input-info" accept="application/json,.json" hidden />
+            </label>
+          </div>
+        </div>
+
         <div class="card info-card">
           <h3 class="card-title">After installing</h3>
           <ul class="info-bullets">
             <li>Your food diary and goals are stored <strong>on this phone</strong>, not in a cloud account.</li>
-            <li>Use <strong>Progress → Backup</strong> before switching phones or clearing browser data.</li>
-            <li>To get updates, reopen the app from the home icon while online (it refreshes itself). You usually <strong>don’t</strong> need to reinstall.</li>
-            <li>Deleting the Home Screen icon can remove easy access; on some browsers it may also clear site data — always backup first.</li>
+            <li>Save a backup to <strong>Files / iCloud Drive</strong> regularly (Progress or this tab).</li>
+            <li>Updates load while you’re online — use <strong>Update app</strong>, then keep the same icon.</li>
           </ul>
         </div>
 
@@ -668,6 +699,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=17"></script>
+  <script type="module" src="js/app.js?v=18"></script>
 </body>
 </html>

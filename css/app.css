@@ -2093,6 +2093,13 @@ select:focus {
   letter-spacing: 0.02em;
   vertical-align: middle;
 }
+.warn-card {
+  border-color: color-mix(in srgb, var(--carbs) 45%, var(--border));
+  background: color-mix(in srgb, var(--carbs) 6%, var(--bg-card));
+}
+.warn-card .card-title {
+  color: var(--text);
+}
 /* Safe areas for notched iPhones */
 body {
   padding-top: env(safe-area-inset-top);
