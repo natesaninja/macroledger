@@ -1,5 +1,5 @@
 /* MacroLedger service worker */
-const CACHE = "macroledger-v14";
+const CACHE = "macroledger-v15";
 const ASSETS = [
   "./",
   "./index.html",

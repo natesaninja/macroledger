@@ -6,6 +6,8 @@ iPhone: Safari → that URL → Share → Add to Home Screen.
 
 If you still see CalorieTrack, you are on the OLD app. Delete that home screen icon and install from this URL only.
 
+**Look:** Quiet ledger — warm paper theme, Source Serif + IBM Plex Sans, text actions (v15).
+
 ## Photo meal log (free + limits)
 
 Snap a plate → AI estimates calories & macros → review → save. No typing required.

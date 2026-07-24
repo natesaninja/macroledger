@@ -245,6 +245,6 @@ export function parseVisionPlaceholder() {
   return {
     drafts: [],
     message:
-      "Use 🍽️ Photo meal on the diary (needs free proxy or Gemini key in Goals). Barcode, search, and voice still work offline.",
+      "Use Photo meal on the diary (needs free proxy or Gemini key in Goals). Barcode, search, and voice still work offline.",
   };
 }

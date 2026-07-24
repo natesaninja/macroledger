@@ -79,37 +79,37 @@ import {
 } from "./persist.js";
 
 const MEALS = [
-  { id: "breakfast", label: "Breakfast", icon: "??" },
-  { id: "lunch", label: "Lunch", icon: "??" },
-  { id: "dinner", label: "Dinner", icon: "??" },
-  { id: "snacks", label: "Snacks", icon: "??" },
+  { id: "breakfast", label: "Breakfast", icon: "" },
+  { id: "lunch", label: "Lunch", icon: "" },
+  { id: "dinner", label: "Dinner", icon: "" },
+  { id: "snacks", label: "Snacks", icon: "" },
 ];
 const CIRC = 2 * Math.PI * 52;
 
 const UI_THEMES = [
   {
     id: "light",
-    name: "Light",
-    desc: "Default � bright & clean",
-    swatches: ["#f4f6f9", "#0a9f68", "#3b6fd9"],
+    name: "Paper",
+    desc: "Quiet ledger (default)",
+    swatches: ["#f6f3ee", "#1f7a54", "#3d5a80"],
   },
   {
     id: "midnight",
-    name: "Midnight",
-    desc: "Dark green",
-    swatches: ["#0f1419", "#00c47a", "#5b8def"],
+    name: "Ink",
+    desc: "Warm dark",
+    swatches: ["#161412", "#5aad84", "#8eabcc"],
   },
   {
     id: "ocean",
-    name: "Ocean",
-    desc: "Cool blue dark",
-    swatches: ["#0a1220", "#3dbbff", "#3dffb0"],
+    name: "Slate",
+    desc: "Cool paper",
+    swatches: ["#eef1f4", "#2f6f8f", "#3d5a80"],
   },
   {
     id: "sunset",
-    name: "Sunset",
-    desc: "Warm coral",
-    swatches: ["#1a1010", "#ff7a45", "#ff5c8a"],
+    name: "Dusk",
+    desc: "Warm evening",
+    swatches: ["#1a1512", "#c47a52", "#d4a85a"],
   },
   {
     id: "contrast",
@@ -134,22 +134,22 @@ function updateThemeToggleIcon(themeId) {
   const icon = document.getElementById("theme-toggle-icon");
   const btn = document.getElementById("theme-toggle");
   if (!icon || !btn) return;
-  // Light mode → show moon (switch to dark). Dark-ish themes → show sun.
-  const isLight = themeId === "light";
-  icon.textContent = isLight ? "🌙" : "☀️";
-  btn.title = isLight ? "Switch to dark mode" : "Switch to light mode";
+  // Paper → offer Ink. Dark-ish themes → offer Paper.
+  const isLight = themeId === "light" || themeId === "ocean";
+  icon.textContent = isLight ? "Ink" : "Paper";
+  btn.title = isLight ? "Switch to ink (dark)" : "Switch to paper (light)";
   btn.setAttribute("aria-label", btn.title);
 }
 
 async function toggleLightDark() {
   const s = await getSettings();
   const cur = s.ui_theme || "light";
-  // Flip between light and midnight; other themes (ocean/sunset) go to light
+  // Flip between paper and ink; other themes return to paper
   const next = cur === "light" ? "midnight" : "light";
   applyTheme(next);
   renderThemePicker(next);
   await setSettings({ ui_theme: next });
-  toast(next === "light" ? "Light mode" : "Dark mode");
+  toast(next === "light" ? "Paper theme" : "Ink theme");
 }
 
 function renderThemePicker(activeId) {
@@ -402,7 +402,7 @@ function renderDensity(d) {
 
 async function refreshStreak() {
   const s = await getStreak();
-  document.getElementById("streak-chip").textContent = `?? ${s.current || 0}d`;
+  document.getElementById("streak-chip").textContent = `Streak ${s.current || 0}d`;
   document.getElementById("streak-chip").title = `Best streak: ${s.best || 0} days`;
 }
 
@@ -529,16 +529,16 @@ function renderMeals(d) {
         <div class="entry-actions">
           ${
             e.user_verified === false
-              ? `<button type="button" class="verify" data-id="${e.id}" title="Confirm">?</button>`
+              ? `<button type="button" class="verify" data-id="${e.id}" title="Confirm">OK</button>`
               : ""
           }
           ${
             e.food_id
-              ? `<button type="button" class="fav" data-id="${e.food_id}" title="Favorite">?</button>`
+              ? `<button type="button" class="fav" data-id="${e.food_id}" title="Favorite">Fav</button>`
               : ""
           }
-          <button type="button" class="edit-serv" data-id="${e.id}" data-s="${e.servings}">?</button>
-          <button type="button" class="del" data-id="${e.id}">??</button>
+          <button type="button" class="edit-serv" data-id="${e.id}" data-s="${e.servings}" title="Edit servings">Edit</button>
+          <button type="button" class="del" data-id="${e.id}" title="Remove">Del</button>
         </div>
       </div>`
       )
@@ -551,13 +551,13 @@ function renderMeals(d) {
         : "";
     return `<article class="meal-card">
       <div class="meal-header">
-        <div class="meal-title"><span>${m.icon}</span> ${m.label}</div>
+        <div class="meal-title">${m.label}</div>
         <span class="meal-cal">${formatNum(mt.calories || 0)} cal</span>
         <div class="meal-actions">
-          <button type="button" class="copy-meal-btn" data-meal="${m.id}" ${
+          <button type="button" class="copy-meal-btn" data-meal="${m.id}" title="Copy from yesterday" ${
             prev[m.id] ? "" : "disabled"
-          }>??</button>
-          <button type="button" class="add-meal-btn" data-meal="${m.id}">+</button>
+          }>Copy</button>
+          <button type="button" class="add-meal-btn" data-meal="${m.id}" title="Add food">+</button>
         </div>
       </div>
       <div class="meal-entries">${rows}</div>
@@ -1102,8 +1102,8 @@ function updatePhotoLogStatus() {
   if (status) status.textContent = line;
   if (hint) {
     hint.textContent = proxy || key
-      ? `Snap a plate — free photo macros (${left} left today). Needs internet.`
-      : "Snap a plate — set Photo proxy URL in Goals first (free Worker).";
+      ? `Photograph a plate for free macro estimates (${left} left today). Needs internet.`
+      : "Photograph a plate — set Photo proxy URL in Goals first (free Worker).";
   }
 }
 
@@ -1946,7 +1946,7 @@ function renderFastingCard() {
     const sum = st.summary || protocolSummary(settings);
     const titleEl = document.getElementById("fasting-title");
     if (titleEl) {
-      titleEl.textContent = st.enabled ? `⏱ ${sum.label}` : "⏱ Intermittent fasting";
+      titleEl.textContent = st.enabled ? sum.label : "Intermittent fasting";
     }
     if (!st.enabled) {
       if (timerEl) timerEl.textContent = "—";
@@ -2331,7 +2331,7 @@ async function boot() {
   // Register SW before heavy UI work so a render bug can't block updates
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=14", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=15", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
