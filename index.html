@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=15" />
+  <link rel="manifest" href="manifest.webmanifest?v=16" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=15" />
+  <link rel="stylesheet" href="css/app.css?v=16" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -88,6 +88,7 @@
         <button class="nav-tab" data-view="foods" type="button">Foods</button>
         <button class="nav-tab" data-view="meals" type="button">Meals</button>
         <button class="nav-tab" data-view="goals" type="button">Goals</button>
+        <button class="nav-tab" data-view="info" type="button">Info</button>
       </nav>
     </header>
 
@@ -446,6 +447,67 @@
           <p class="hint">All data is stored only in this browser / phone. Use Backup on Progress to move to a new device. Don’t delete the Home Screen icon to update.</p>
         </div>
       </section>
+
+      <section id="view-info" class="view">
+        <h2 class="section-title">Info</h2>
+
+        <div class="card info-card">
+          <h3 class="card-title">Add to Home Screen</h3>
+          <p class="hint" style="margin-top:0">
+            Install MacroLedger like an app — full-screen, faster reopen, and better offline use.
+            No App Store needed. Your diary stays on this device.
+          </p>
+        </div>
+
+        <div class="card info-card">
+          <h3 class="card-title">iPhone (Safari)</h3>
+          <p class="hint" style="margin-top:0">
+            Use <strong>Safari</strong> for the most reliable install. Chrome’s menu can look different and may not offer “Add to Home Screen” the same way.
+          </p>
+          <ol class="info-steps">
+            <li>Open <strong>https://natesaninja.github.io/macroledger/</strong> in <strong>Safari</strong>.</li>
+            <li>Tap the <strong>Share</strong> button
+              <span class="info-share-badge" aria-hidden="true">Share</span>
+              at the bottom of the screen (or near the top on some iPads).
+            </li>
+            <li>Scroll the share sheet and tap <strong>Add to Home Screen</strong>.</li>
+            <li>Confirm the name <strong>MacroLedger</strong>, then tap <strong>Add</strong>.</li>
+            <li>Open the new icon from your Home Screen — that’s the installed app.</li>
+          </ol>
+          <p class="hint">
+            Tip: if you already have an old “CalorieTrack” icon, delete it and install only from this MacroLedger URL.
+          </p>
+        </div>
+
+        <div class="card info-card">
+          <h3 class="card-title">Android (Chrome)</h3>
+          <ol class="info-steps">
+            <li>Open this site in <strong>Chrome</strong>.</li>
+            <li>Tap the <strong>menu</strong> (⋮) in the top-right.</li>
+            <li>Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li>
+            <li>Confirm, then open MacroLedger from your home screen or app drawer.</li>
+          </ol>
+          <p class="hint">
+            Some phones show an install banner automatically; you can use that instead of the menu.
+          </p>
+        </div>
+
+        <div class="card info-card">
+          <h3 class="card-title">After installing</h3>
+          <ul class="info-bullets">
+            <li>Your food diary and goals are stored <strong>on this phone</strong>, not in a cloud account.</li>
+            <li>Use <strong>Progress → Backup</strong> before switching phones or clearing browser data.</li>
+            <li>To get updates, reopen the app from the home icon while online (it refreshes itself). You usually <strong>don’t</strong> need to reinstall.</li>
+            <li>Deleting the Home Screen icon can remove easy access; on some browsers it may also clear site data — always backup first.</li>
+          </ul>
+        </div>
+
+        <div class="card info-card">
+          <h3 class="card-title">Need the steps again?</h3>
+          <p class="hint" style="margin-top:0">You can also open the short iPhone coach from the install banner when it appears.</p>
+          <button type="button" class="primary-btn" id="info-show-ios-steps">Show iPhone steps</button>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -606,6 +668,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=15"></script>
+  <script type="module" src="js/app.js?v=16"></script>
 </body>
 </html>

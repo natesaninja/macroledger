@@ -1839,6 +1839,8 @@ function setup() {
   document.getElementById("ios-install-modal").addEventListener("click", (e) => {
     if (e.target.id === "ios-install-modal") closeIosInstallHelp();
   });
+  const infoIosBtn = document.getElementById("info-show-ios-steps");
+  if (infoIosBtn) infoIosBtn.onclick = openIosInstallHelp;
 
   window.addEventListener("beforeinstallprompt", (e) => {
     // Android/desktop Chrome only � still supported, not our focus
@@ -2331,7 +2333,7 @@ async function boot() {
   // Register SW before heavy UI work so a render bug can't block updates
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=15", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=16", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});
