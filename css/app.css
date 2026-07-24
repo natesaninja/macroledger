@@ -1695,6 +1695,32 @@ select:focus {
 .density-chip.green { background: rgba(0,196,122,0.15); color: var(--accent); }
 .density-chip.yellow { background: rgba(245,166,35,0.15); color: #ffc266; }
 .density-chip.red { background: rgba(255,107,107,0.15); color: #ff8a8a; }
+.photo-busy-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 1rem 1.75rem;
+}
+
+.photo-busy-spinner {
+  width: 42px;
+  height: 42px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: photo-spin 0.75s linear infinite;
+}
+
+@keyframes photo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.photo-log-hint {
+  font-size: 0.78rem;
+}
+
 .flag-uncertain {
   display: inline-block; font-size: 0.65rem; font-weight: 700; color: #ffc266;
   background: rgba(245,166,35,0.15); padding: 0.1rem 0.35rem; border-radius: 4px; margin-left: 0.25rem;

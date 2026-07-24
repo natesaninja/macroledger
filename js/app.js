@@ -50,6 +50,12 @@ import {
   completeOnboarding,
 } from "./onboarding.js";
 import { parseFoodUtterance } from "./nlp-log.js";
+import {
+  estimateMealFromPhoto,
+  photoScansRemaining,
+  CLIENT_DAILY_LIMIT,
+  PhotoLogError,
+} from "./photo-log.js";
 import { proposeAdaptiveTargets, applyAdaptiveProposal } from "./adaptive.js";
 import { getFastingStatus, fmtDuration, PROTOCOLS, protocolSummary } from "./fasting.js";
 import {
@@ -266,6 +272,7 @@ function updateOnline() {
 // ---- day load ----
 async function loadDay() {
   settings = await getSettings();
+  updatePhotoLogStatus();
   const goals = goalsFromSettings(settings);
   const entries = await diaryForDate(currentDate);
   const exercises = await exerciseForDate(currentDate);
@@ -1046,6 +1053,8 @@ async function loadGoals() {
     "set-eating-start": "eating_window_start",
     "set-custom-eat": "custom_eat_hours",
     "set-adaptive": "adaptive_enabled",
+    "set-photo-proxy": "photo_proxy_url",
+    "set-photo-gemini-key": "photo_gemini_key",
   };
   for (const [id, key] of Object.entries(map)) {
     const el = document.getElementById(id);
@@ -1071,11 +1080,30 @@ async function loadGoals() {
     ap.innerHTML = `<p class="hint" style="margin:0">Adaptive off or unavailable.</p>`;
   } else {
     ap.innerHTML = `<div class="metabolism-panel">
-      <strong>Adaptive suggestion:</strong> ${formatNum(prop.current)} ? <strong>${formatNum(prop.proposed)}</strong> kcal
+      <strong>Adaptive suggestion:</strong> ${formatNum(prop.current)} → <strong>${formatNum(prop.proposed)}</strong> kcal
       (${prop.delta >= 0 ? "+" : ""}${prop.delta})
       <p class="hint" style="margin:0.35rem 0 0">${escapeHtml(prop.reason)}</p>
       ${MacroLedgers(prop.macros.protein, prop.macros.carbs, prop.macros.fat)}
     </div>`;
+  }
+  updatePhotoLogStatus();
+}
+
+function updatePhotoLogStatus() {
+  const left = photoScansRemaining(CLIENT_DAILY_LIMIT);
+  const proxy = (settings?.photo_proxy_url || "").trim();
+  const key = (settings?.photo_gemini_key || "").trim();
+  const status = document.getElementById("photo-setup-status");
+  const hint = document.getElementById("photo-log-hint");
+  let mode = "Not set up — add proxy URL or personal Gemini key above";
+  if (proxy) mode = "Shared free proxy ready (others can use without keys)";
+  else if (key) mode = "Personal Gemini key on this device only";
+  const line = `${mode}. Free scans left today: ${left}/${CLIENT_DAILY_LIMIT}.`;
+  if (status) status.textContent = line;
+  if (hint) {
+    hint.textContent = proxy || key
+      ? `Snap a plate — free photo macros (${left} left today). Needs internet.`
+      : "Snap a plate — set Photo proxy URL in Goals first (free Worker).";
   }
 }
 
@@ -1251,6 +1279,48 @@ function setupOnboarding() {
   };
 }
 
+// ---- Photo meal estimate ----
+let photoBusy = false;
+
+async function runPhotoMealEstimate(file) {
+  if (photoBusy) return;
+  photoBusy = true;
+  const busy = document.getElementById("photo-busy-modal");
+  if (busy) busy.hidden = false;
+  try {
+    if (!settings) settings = await getSettings();
+    const meal = guessMealSlot();
+    document.getElementById("review-meal").value = meal;
+    const result = await estimateMealFromPhoto(file, meal, {
+      proxyUrl: settings.photo_proxy_url || "",
+      geminiKey: settings.photo_gemini_key || "",
+      dailyLimit: CLIENT_DAILY_LIMIT,
+    });
+    openReview(result.drafts);
+    updatePhotoLogStatus();
+    toast(
+      result.remaining != null
+        ? `Estimated ${result.drafts.length} item(s) · ${result.remaining} free scans left today`
+        : `Estimated ${result.drafts.length} item(s) — review & save`
+    );
+  } catch (err) {
+    console.warn("photo log failed", err);
+    const msg =
+      err instanceof PhotoLogError || err?.message
+        ? err.message
+        : "Could not estimate meal from photo";
+    toast(msg);
+    if (err?.code === "not_configured") {
+      // Nudge user toward Goals setup
+      const goalsTab = document.querySelector('.nav-tab[data-view="goals"]');
+      if (goalsTab) setTimeout(() => goalsTab.click(), 600);
+    }
+  } finally {
+    if (busy) busy.hidden = true;
+    photoBusy = false;
+  }
+}
+
 // ---- Review drafts (NLP / AI) ----
 function openReview(drafts) {
   reviewDrafts = drafts.map((d) => ({ ...d }));
@@ -1332,6 +1402,20 @@ function setup() {
   document.getElementById("btn-voice-log").onclick = () => {
     document.getElementById("nlp-modal").hidden = false;
     document.getElementById("nlp-text").focus();
+  };
+  const photoInput = document.getElementById("photo-log-input");
+  document.getElementById("btn-photo-log").onclick = () => {
+    if (!navigator.onLine) {
+      return toast("Photo macros need internet. Use barcode or search offline.");
+    }
+    photoInput.value = "";
+    photoInput.click();
+  };
+  photoInput.onchange = async () => {
+    const file = photoInput.files && photoInput.files[0];
+    photoInput.value = "";
+    if (!file) return;
+    await runPhotoMealEstimate(file);
   };
   document.getElementById("btn-scan-barcode").onclick = () => {
     openModal(guessMealSlot());
@@ -1651,7 +1735,12 @@ function setup() {
   document.getElementById("goals-form").onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    await setSettings(Object.fromEntries(fd.entries()));
+    const partial = Object.fromEntries(fd.entries());
+    // Don't wipe personal Gemini key if the password field was left blank
+    if (!String(partial.photo_gemini_key || "").trim()) {
+      delete partial.photo_gemini_key;
+    }
+    await setSettings(partial);
     document.getElementById("goals-saved").hidden = false;
     setTimeout(() => {
       document.getElementById("goals-saved").hidden = true;
@@ -2242,7 +2331,7 @@ async function boot() {
   // Register SW before heavy UI work so a render bug can't block updates
   if ("serviceWorker" in navigator) {
     try {
-      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=13", {
+      const reg = await navigator.serviceWorker.register("./sw-ml.js?v=14", {
         updateViaCache: "none",
       });
       reg.update().catch(() => {});

@@ -239,12 +239,12 @@ function round1(n) {
 }
 
 /**
- * Vision placeholder — flags uncertain until real model wired.
+ * @deprecated Use estimateMealFromPhoto from photo-log.js
  */
 export function parseVisionPlaceholder() {
   return {
     drafts: [],
     message:
-      "Use 📷 Scan barcode for packages. Plate photo AI is not available yet — search or voice/text instead.",
+      "Use 🍽️ Photo meal on the diary (needs free proxy or Gemini key in Goals). Barcode, search, and voice still work offline.",
   };
 }

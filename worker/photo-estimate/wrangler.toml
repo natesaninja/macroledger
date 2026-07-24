@@ -1,0 +1,12 @@
+name = "macroledger-photo-estimate"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# Free tier defaults — override in dashboard if needed
+[vars]
+MODEL = "gemini-2.5-flash-lite"
+PER_IP_DAILY = "5"
+GLOBAL_DAILY = "400"
+
+# Set secret (do not commit):
+#   npx wrangler secret put GEMINI_API_KEY

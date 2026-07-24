@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=13" />
+  <link rel="manifest" href="manifest.webmanifest?v=14" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=13" />
+  <link rel="stylesheet" href="css/app.css?v=14" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">🔥 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">MacroLedger v12 · fixed</span>
+      <span id="app-version" class="app-version">MacroLedger v14 · photo log</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -175,12 +175,17 @@
         <div class="quick-log card-lite">
           <div class="quick-log-title">Quick log</div>
           <div class="quick-actions">
+            <button type="button" class="chip-btn" id="btn-photo-log">🍽️ Photo meal</button>
             <button type="button" class="chip-btn" id="btn-scan-barcode">📷 Scan barcode</button>
             <button type="button" class="chip-btn" id="btn-voice-log">🎤 Voice / text</button>
             <button type="button" class="chip-btn" id="btn-restaurant-build">🌮 Restaurant build</button>
             <button type="button" class="chip-btn" id="btn-show-recents">⏱ Recents</button>
             <button type="button" class="chip-btn" id="btn-show-favs">★ Favorites</button>
           </div>
+          <input type="file" id="photo-log-input" accept="image/*" capture="environment" hidden />
+          <p class="hint photo-log-hint" id="photo-log-hint" style="margin:0.45rem 0 0">
+            Snap a plate — free photo macros (limited/day). Needs internet.
+          </p>
           <div class="quick-rail" id="quick-rail"></div>
         </div>
 
@@ -419,6 +424,20 @@
             </label>
             <p class="hint span-2" id="goals-fast-summary" style="margin:0">—</p>
 
+            <h3 class="card-title span-2">Photo food log (free + limits)</h3>
+            <p class="hint span-2" style="margin:0">
+              Free shared photo macros for everyone: deploy <code>worker/photo-estimate</code> (Cloudflare free + Gemini free key as a Worker secret),
+              then paste the Worker URL below. Users never need their own keys.
+              Optional personal Gemini key is only a fallback and may be blocked by the browser — prefer the proxy.
+            </p>
+            <label class="span-2">Photo proxy URL
+              <input name="photo_proxy_url" id="set-photo-proxy" type="url" placeholder="https://macroledger-photo-estimate.YOUR.workers.dev" autocomplete="off" />
+            </label>
+            <label class="span-2">Personal Gemini key (optional fallback)
+              <input name="photo_gemini_key" id="set-photo-gemini-key" type="password" placeholder="Usually leave blank — use Worker URL" autocomplete="off" />
+            </label>
+            <p class="hint span-2" id="photo-setup-status" style="margin:0">—</p>
+
             <div class="span-2 form-actions">
               <button type="submit" class="primary-btn">Save goals</button>
               <span class="save-hint" id="goals-saved" hidden>Saved ✓</span>
@@ -573,9 +592,20 @@
     </div>
   </div>
 
+  <!-- Photo estimating overlay -->
+  <div class="modal-backdrop" id="photo-busy-modal" hidden>
+    <div class="modal modal-sm" role="dialog" aria-labelledby="photo-busy-title">
+      <div class="modal-body photo-busy-body">
+        <div class="photo-busy-spinner" aria-hidden="true"></div>
+        <h2 id="photo-busy-title" style="margin:0.75rem 0 0.35rem;font-size:1.05rem">Estimating meal…</h2>
+        <p class="hint" style="margin:0;text-align:center">Reading the photo for calories &amp; macros. No typing needed.</p>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=13"></script>
+  <script type="module" src="js/app.js?v=14"></script>
 </body>
 </html>

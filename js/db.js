@@ -278,6 +278,10 @@ export const DEFAULT_SETTINGS = {
   adaptive_enabled: "1",
   units: "imperial",
   ui_theme: "light",
+  /** Shared Cloudflare Worker URL for free multi-user photo macros */
+  photo_proxy_url: "",
+  /** Optional personal Gemini key (this device only; not for public sharing) */
+  photo_gemini_key: "",
 };
 
 export async function getSettings() {
