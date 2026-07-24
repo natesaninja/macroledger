@@ -1,5 +1,5 @@
 /* MacroLedger service worker */
-const CACHE = "macroledger-v19";
+const CACHE = "macroledger-v20";
 const ASSETS = [
   "./",
   "./index.html",
@@ -22,9 +22,11 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
-  // Activate immediately so users never need to delete the Home Screen icon
-  self.skipWaiting();
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+  // Cache new assets; do NOT skipWaiting here (avoids reload loops).
+  // App sends SKIP_WAITING when user taps Update app.
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).catch(() => {})
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -37,9 +39,8 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data === "SKIP_WAITING") self.skipWaiting();
-  if (event.data === "GET_VERSION") {
-    event.source?.postMessage({ type: "SW_VERSION", cache: CACHE });
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
   }
 });
 

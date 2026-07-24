@@ -1426,26 +1426,31 @@ function setup() {
   });
 
   // Quick log strip
-  document.getElementById("btn-show-recents").onclick = () => renderQuickRail("recents");
-  document.getElementById("btn-show-favs").onclick = () => renderQuickRail("favs");
-  document.getElementById("btn-voice-log").onclick = () => {
-    document.getElementById("nlp-modal").hidden = false;
-    document.getElementById("nlp-text").focus();
-  };
-  const photoInput = document.getElementById("photo-log-input");
-  document.getElementById("btn-photo-log").onclick = () => {
-    if (!navigator.onLine) {
-      return toast("Photo macros need internet. Use barcode or search offline.");
-    }
-    photoInput.value = "";
-    photoInput.click();
-  };
-  photoInput.onchange = async () => {
-    const file = photoInput.files && photoInput.files[0];
-    photoInput.value = "";
-    if (!file) return;
-    await runPhotoMealEstimate(file);
-  };
+  const el = (id) => document.getElementById(id);
+  if (el("btn-show-recents")) el("btn-show-recents").onclick = () => renderQuickRail("recents");
+  if (el("btn-show-favs")) el("btn-show-favs").onclick = () => renderQuickRail("favs");
+  if (el("btn-voice-log")) {
+    el("btn-voice-log").onclick = () => {
+      if (el("nlp-modal")) el("nlp-modal").hidden = false;
+      el("nlp-text")?.focus();
+    };
+  }
+  const photoInput = el("photo-log-input");
+  if (el("btn-photo-log") && photoInput) {
+    el("btn-photo-log").onclick = () => {
+      if (!navigator.onLine) {
+        return toast("Photo macros need internet. Use barcode or search offline.");
+      }
+      photoInput.value = "";
+      photoInput.click();
+    };
+    photoInput.onchange = async () => {
+      const file = photoInput.files && photoInput.files[0];
+      photoInput.value = "";
+      if (!file) return;
+      await runPhotoMealEstimate(file);
+    };
+  }
   document.getElementById("btn-scan-barcode").onclick = () => {
     openModal(guessMealSlot());
     // Wait for modal paint, then request camera (user gesture chain on iOS)
@@ -2378,17 +2383,28 @@ async function tryRestoreUserData() {
 }
 
 // ---- App updates (never delete Home Screen icon) ----
-let swRefreshing = false;
 let swReg = null;
+const SW_RELOAD_KEY = "ml_sw_reload_at";
 
 function wireServiceWorkerLifecycle() {
   if (!("serviceWorker" in navigator)) return;
-  // When a new SW takes control, reload once so the new UI appears
+  // Reload at most once per 60s — prevents infinite reload loops on iPhone
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (swRefreshing) return;
-    swRefreshing = true;
+    try {
+      const last = parseInt(sessionStorage.getItem(SW_RELOAD_KEY) || "0", 10) || 0;
+      if (Date.now() - last < 60_000) return;
+      sessionStorage.setItem(SW_RELOAD_KEY, String(Date.now()));
+    } catch {
+      /* private mode */
+    }
     toast("Update installed — reloading…");
-    setTimeout(() => window.location.reload(), 350);
+    setTimeout(() => {
+      try {
+        window.location.reload();
+      } catch {
+        /* ignore */
+      }
+    }, 400);
   });
 }
 
@@ -2405,11 +2421,19 @@ async function checkForAppUpdate({ manual = false } = {}) {
     if (manual) toast("Checking for updates…");
     const reg = swReg || (await navigator.serviceWorker.getRegistration()) || null;
     if (!reg) {
-      if (manual) toast("No service worker yet — reopen the app once online");
+      if (manual) {
+        // Hard refresh path without SW thrash
+        window.location.reload();
+      }
       return;
     }
     await reg.update();
     if (reg.waiting) {
+      try {
+        sessionStorage.setItem(SW_RELOAD_KEY, "0"); // allow one reload for this update
+      } catch {
+        /* ok */
+      }
       reg.waiting.postMessage("SKIP_WAITING");
       if (manual) toast("Update found — applying…");
       return;
@@ -2418,7 +2442,13 @@ async function checkForAppUpdate({ manual = false } = {}) {
       if (manual) toast("Downloading update…");
       return;
     }
-    if (manual) toast("You’re on the latest version");
+    if (manual) {
+      toast("You’re on the latest version");
+      // Soft reload can still pick up HTML/CSS if SW was stuck
+      if (confirm("Reload the app now to refresh the screen?")) {
+        window.location.reload();
+      }
+    }
   } catch (e) {
     console.warn("update check failed", e);
     if (manual) toast("Update check failed — try again online");
@@ -2429,25 +2459,22 @@ async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   wireServiceWorkerLifecycle();
   try {
-    swReg = await navigator.serviceWorker.register(`./sw-ml.js?v=19`, {
+    // Stable URL (no query) so registration does not thrash every version bump
+    swReg = await navigator.serviceWorker.register("./sw-ml.js", {
       updateViaCache: "none",
     });
+    // Check for updates quietly — do NOT skipWaiting unless a new worker is waiting
     swReg.update().catch(() => {});
-    if (swReg.waiting) swReg.waiting.postMessage("SKIP_WAITING");
     swReg.addEventListener("updatefound", () => {
       const nw = swReg.installing;
       if (!nw) return;
       nw.addEventListener("statechange", () => {
         if (nw.state === "installed" && navigator.serviceWorker.controller) {
-          toast("Update ready — applying…");
-          nw.postMessage("SKIP_WAITING");
+          // New version ready — activate on next visit or when user taps Update
+          toast("Update ready — open Info → Update app");
         }
       });
     });
-    // Periodic check while app is open
-    setInterval(() => {
-      if (navigator.onLine) swReg?.update().catch(() => {});
-    }, 30 * 60 * 1000);
     console.log("SW registered", swReg.scope);
   } catch (e) {
     console.warn("SW failed", e);
@@ -2456,14 +2483,37 @@ async function registerServiceWorker() {
 
 // ---- boot ----
 async function boot() {
-  setup();
-  setupFastingButtons();
-  setupRestaurantBuilder();
+  // Never leave photo overlay stuck open from a prior crash
+  try {
+    const busy = document.getElementById("photo-busy-modal");
+    if (busy) busy.hidden = true;
+  } catch {
+    /* ok */
+  }
+
+  try {
+    setup();
+  } catch (err) {
+    console.error("setup failed", err);
+    toast("UI setup issue — try Info → Update app");
+  }
+
+  try {
+    setupFastingButtons();
+    setupRestaurantBuilder();
+  } catch (err) {
+    console.warn("secondary setup failed", err);
+  }
+
   const themeBtn = document.getElementById("theme-toggle");
   if (themeBtn) themeBtn.addEventListener("click", () => toggleLightDark());
 
   // Recover data BEFORE seed/onboarding so updates don't wipe you
-  await tryRestoreUserData();
+  try {
+    await tryRestoreUserData();
+  } catch (err) {
+    console.warn("restore failed", err);
+  }
 
   // Apply saved theme ASAP
   try {
@@ -2473,47 +2523,38 @@ async function boot() {
     applyTheme("light");
   }
 
-  await ensureSeeded(SEED_FOODS);
-  // Version key must bump when RESTAURANT_FOODS grows so existing phones get new chains
-  const addedRestaurants = await ensureRestaurantFoods(RESTAURANT_FOODS, "eastcoast_v2");
-  if (addedRestaurants > 0) {
-    console.log(`Added ${addedRestaurants} restaurant foods`);
-  }
-
-  if (await needsOnboarding()) {
-    document.getElementById("onboard").hidden = false;
-    onboardStep = 0;
-    showOnboardStep();
-  } else {
-    // Keep mirror fresh
-    const s = await getSettings();
-    saveProfileBackup(s);
-    scheduleFullBackup(exportAllJson);
-    // Gentle reminder: only a *file* backup survives deleting the Home Screen icon
-    const days = daysSinceFileBackup();
-    if (days > 7) {
-      setTimeout(() => {
-        toast("Tip: Progress → Export backup (keeps data if icon is removed)");
-      }, 2500);
+  try {
+    await ensureSeeded(SEED_FOODS);
+    const addedRestaurants = await ensureRestaurantFoods(RESTAURANT_FOODS, "eastcoast_v2");
+    if (addedRestaurants > 0) {
+      console.log(`Added ${addedRestaurants} restaurant foods`);
     }
+  } catch (err) {
+    console.warn("seed failed", err);
   }
 
-  // Register SW — do NOT wipe caches here (old bug deleted the live cache every boot)
-  await registerServiceWorker();
-
-  if (window.caches) {
-    try {
-      const keys = await caches.keys();
-      // Only remove unknown/legacy caches; keep current APP_CACHE
-      await Promise.all(
-        keys
-          .filter((k) => k.startsWith("macroledger-") && k !== APP_CACHE)
-          .map((k) => caches.delete(k))
-      );
-    } catch {
-      /* ignore */
+  try {
+    if (await needsOnboarding()) {
+      document.getElementById("onboard").hidden = false;
+      onboardStep = 0;
+      showOnboardStep();
+    } else {
+      const s = await getSettings();
+      saveProfileBackup(s);
+      scheduleFullBackup(exportAllJson);
+      const days = daysSinceFileBackup();
+      if (days > 7) {
+        setTimeout(() => {
+          toast("Tip: Progress → Save backup file (keeps data if icon is removed)");
+        }, 2500);
+      }
     }
+  } catch (err) {
+    console.warn("onboarding gate failed", err);
   }
+
+  // Register SW last — never block the diary on SW
+  registerServiceWorker().catch((e) => console.warn(e));
 
   try {
     await loadDay();
