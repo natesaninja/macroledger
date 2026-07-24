@@ -1,8 +1,11 @@
 {
   "name": "MacroLedger",
   "short_name": "MacroLedger",
-  "description": "Offline calorie and macro tracker",
-  "start_url": "./index.html",
+  "lang": "en",
+  "description": "Offline calorie and macro tracker — data stays on your phone",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
   "display": "standalone",
   "background_color": "#0f1419",
   "theme_color": "#1f7a54",
