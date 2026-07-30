@@ -66,6 +66,12 @@ import {
   sumSelection,
   selectionToLines,
 } from "./restaurant-builder.js";
+import {
+  foodPoints,
+  dayPointsSummary,
+  formatPoints,
+  POINTS_HELP,
+} from "./points.js";
 
 import {
   startScanner,
@@ -266,12 +272,18 @@ function toast(msg) {
   }, 2200);
 }
 function MacroLedgers(p, c, f, opts = {}) {
+  const showPts = settings?.points_enabled !== "0" && opts.points != null;
   return `<div class="macro-chips">
     ${opts.calories != null ? `<span class="chip cal"><span class="chip-l">Cal</span> ${formatNum(opts.calories)}</span>` : ""}
+    ${showPts ? `<span class="chip points"><span class="chip-l">Pts</span> ${formatPoints(opts.points)}</span>` : ""}
     <span class="chip protein"><span class="chip-l">P</span> ${formatNum(p, 1)}g</span>
     <span class="chip carbs"><span class="chip-l">C</span> ${formatNum(c, 1)}g</span>
     <span class="chip fat"><span class="chip-l">F</span> ${formatNum(f, 1)}g</span>
   </div>`;
+}
+function ptsFor(n) {
+  if (!n || settings?.points_enabled === "0") return null;
+  return foodPoints(n);
 }
 function downloadBlob(filename, blob) {
   const a = document.createElement("a");
@@ -325,6 +337,13 @@ async function loadDay() {
   const prevCounts = { breakfast: 0, lunch: 0, dinner: 0, snacks: 0 };
   for (const e of prevEntries) prevCounts[e.meal] = (prevCounts[e.meal] || 0) + 1;
 
+  const points = dayPointsSummary({
+    entries,
+    burned,
+    settings,
+    goals,
+  });
+
   const day = {
     goals,
     totals,
@@ -339,6 +358,8 @@ async function loadDay() {
     burn_plan: burnPlan(goals, totals.calories, burned, weightLb, meta),
     metabolism: meta,
     user_name: settings.user_name || "You",
+    points,
+    entries,
   };
   renderDay(day);
 }
@@ -385,6 +406,7 @@ function renderDay(d) {
   renderBurn(d);
   renderDensity(d);
   renderMicroBars(d);
+  renderPointsCard(d);
   renderFastingCard();
   renderWater(d.water, d.goals.water);
   renderMeals(d);
@@ -436,7 +458,7 @@ async function renderQuickRail(mode) {
     .map(
       (f) => `<button type="button" class="quick-pill" data-id="${f.id}">
       <div class="qp-name">${escapeHtml(f.name)}</div>
-      <div class="qp-cal">${formatNum(f.calories)} cal � tap to add</div>
+      <div class="qp-cal">${formatNum(f.calories)} cal${settings?.points_enabled !== "0" ? ` · ${formatPoints(foodPoints(f))} pts` : ""} � tap to add</div>
     </button>`
     )
     .join("");
@@ -542,9 +564,16 @@ function renderMeals(d) {
               : ""
           }${e.source && e.source !== "manual" ? `<span class="badge">${escapeHtml(e.source)}</span>` : ""}</div>
           <div class="entry-meta">${formatNum(e.servings, 2)} � ${escapeHtml(e.serving_size)}</div>
-          ${MacroLedgers(e.protein, e.carbs, e.fat, { calories: e.calories })}
+          ${MacroLedgers(e.protein, e.carbs, e.fat, {
+            calories: e.calories,
+            points: ptsFor(e),
+          })}
         </div>
-        <div class="entry-cals">${formatNum(e.calories)}</div>
+        <div class="entry-cals">${formatNum(e.calories)}${
+          ptsFor(e) != null
+            ? `<div class="entry-pts">${formatPoints(ptsFor(e))} pts</div>`
+            : ""
+        }</div>
         <div class="entry-actions">
           ${
             e.user_verified === false
@@ -562,16 +591,22 @@ function renderMeals(d) {
       </div>`
       )
       .join("");
+    const mealPts = entries.reduce((s, e) => s + (foodPoints(e) || 0), 0);
     const mealMacros =
       entries.length > 0
         ? `<div class="meal-macro-row">${MacroLedgers(mt.protein, mt.carbs, mt.fat, {
             calories: mt.calories,
+            points: settings?.points_enabled !== "0" ? mealPts : null,
           })}</div>`
         : "";
     return `<article class="meal-card">
       <div class="meal-header">
         <div class="meal-title">${m.label}</div>
-        <span class="meal-cal">${formatNum(mt.calories || 0)} cal</span>
+        <span class="meal-cal">${formatNum(mt.calories || 0)} cal${
+          settings?.points_enabled !== "0" && entries.length
+            ? ` · ${formatPoints(mealPts)} pts`
+            : ""
+        }</span>
         <div class="meal-actions">
           <button type="button" class="copy-meal-btn" data-meal="${m.id}" title="Copy from yesterday" ${
             prev[m.id] ? "" : "disabled"
@@ -698,7 +733,10 @@ async function doSearch(q) {
     <button type="button" class="result-item" data-id="${f.id}">
       <div class="rname">${escapeHtml(f.name)}${f.is_custom ? '<span class="badge">Custom</span>' : ""}</div>
       <div class="rmeta">${escapeHtml(f.serving_size)}</div>
-      ${MacroLedgers(f.protein, f.carbs, f.fat, { calories: f.calories })}
+      ${MacroLedgers(f.protein, f.carbs, f.fat, {
+        calories: f.calories,
+        points: ptsFor(f),
+      })}
     </button>`
     )
     .join("");
@@ -719,11 +757,19 @@ function updatePreview() {
   const food = selectedFood || pendingOff;
   if (!food) return;
   const s = parseFloat(document.getElementById("servings-input").value) || 1;
+  const scaled = {
+    calories: food.calories * s,
+    protein: food.protein * s,
+    carbs: food.carbs * s,
+    fat: food.fat * s,
+    fiber: (food.fiber || 0) * s,
+    sugar_g: (food.sugar_g || 0) * s,
+  };
   document.getElementById("preview-macros").innerHTML = MacroLedgers(
-    food.protein * s,
-    food.carbs * s,
-    food.fat * s,
-    { calories: food.calories * s }
+    scaled.protein,
+    scaled.carbs,
+    scaled.fat,
+    { calories: scaled.calories, points: ptsFor(scaled) }
   );
 }
 
@@ -1067,6 +1113,9 @@ async function loadGoals() {
     "set-sodium": "sodium_goal",
     "set-sugar": "sugar_goal",
     "set-show-micros": "show_micros",
+    "set-points-enabled": "points_enabled",
+    "set-points-budget": "points_budget",
+    "set-points-exercise": "points_from_exercise",
     "set-fasting-enabled": "fasting_enabled",
     "set-fasting-protocol": "fasting_protocol",
     "set-eating-start": "eating_window_start",
@@ -1104,6 +1153,19 @@ async function loadGoals() {
       <p class="hint" style="margin:0.35rem 0 0">${escapeHtml(prop.reason)}</p>
       ${MacroLedgers(prop.macros.protein, prop.macros.carbs, prop.macros.fat)}
     </div>`;
+  }
+  const goalsPts = goalsFromSettings(settings);
+  const previewPts = dayPointsSummary({ entries: [], burned: 0, settings, goals: goalsPts });
+  const pg = document.getElementById("points-goals-summary");
+  if (pg) {
+    const autoNote =
+      settings.points_budget && String(settings.points_budget).trim() !== ""
+        ? "manual budget"
+        : "auto from calorie goal";
+    pg.textContent =
+      settings.points_enabled === "0"
+        ? "Points are off — diary shows macros only."
+        : `${POINTS_HELP.title}: ${formatPoints(previewPts.budget)} pts/day (${autoNote}). ${POINTS_HELP.formula}`;
   }
   updatePhotoLogStatus();
 }
@@ -2032,6 +2094,48 @@ function setup() {
   });
 }
 
+
+function renderPointsCard(d) {
+  const card = document.getElementById("points-card");
+  if (!card) return;
+  const pts = d.points;
+  if (!pts || !pts.enabled) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  const rem = pts.remaining;
+  const over = pts.over;
+  document.getElementById("points-remaining").textContent = formatPoints(Math.abs(rem));
+  document.getElementById("points-remaining-label").textContent = over
+    ? "over budget"
+    : "left today";
+  document.getElementById("points-budget").textContent = formatPoints(pts.budget);
+  document.getElementById("points-used").textContent = formatPoints(pts.used);
+  document.getElementById("points-earned").textContent =
+    pts.earned > 0 ? `+${formatPoints(pts.earned)}` : "0";
+  const st = document.getElementById("points-status");
+  if (st) {
+    st.textContent = over ? "Over" : rem <= pts.budget * 0.15 ? "Low" : "On track";
+    st.className = "points-phase " + (over ? "over" : rem <= pts.budget * 0.15 ? "low" : "ok");
+  }
+  const bar = document.getElementById("points-progress");
+  if (bar) {
+    const denom = pts.budget + (pts.earned || 0) || 1;
+    const usedPct = Math.min(100, (pts.used / denom) * 100);
+    bar.style.width = `${usedPct}%`;
+    bar.classList.toggle("over", over);
+  }
+  const hint = document.getElementById("points-hint");
+  if (hint) {
+    hint.textContent = over
+      ? `Over by ${formatPoints(Math.abs(rem))} pts. Protein-heavy picks cost less next meal.`
+      : `${formatPoints(pts.used)} of ${formatPoints(pts.budget)} used` +
+        (pts.earned ? ` · exercise added ${formatPoints(pts.earned)}` : "") +
+        ` · weekly flex ~${formatPoints(pts.weeklyFlex)} if you want wiggle room.`;
+  }
+}
+
 function renderMicroBars(d) {
   const el = document.getElementById("micro-bars");
   if (!el) return;
@@ -2347,7 +2451,10 @@ function renderRestaurantBuilder() {
 
   const totals = sumSelection(b, rbState.selected, getRbFormat());
   document.getElementById("rb-totals").innerHTML = `
-    <div class="macro-chips">${MacroLedgers(totals.protein, totals.carbs, totals.fat, { calories: totals.calories })}</div>
+    <div class="macro-chips">${MacroLedgers(totals.protein, totals.carbs, totals.fat, {
+      calories: totals.calories,
+      points: ptsFor(totals),
+    })}</div>
     <div class="macro-chips" style="margin-top:0.35rem">
       <span class="chip cal"><span class="chip-l">Na</span> ${formatNum(totals.sodium_mg)}mg</span>
       <span class="chip carbs"><span class="chip-l">Sugar</span> ${formatNum(totals.sugar_g, 1)}g</span>

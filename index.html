@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=26" />
-  <link rel="icon" href="icons/icon-192.png?v=26" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=26" />
+  <link rel="manifest" href="manifest.webmanifest?v=27" />
+  <link rel="icon" href="icons/icon-192.png?v=27" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=27" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=26" />
+  <link rel="stylesheet" href="css/app.css?v=27" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -76,7 +76,7 @@
         <img
           class="brand-mark"
           id="brand-logo"
-          src="icons/logo-mark-light.png?v=26"
+          src="icons/logo-mark-light.png?v=27"
           width="72"
           height="72"
           alt="MacroLedger"
@@ -128,6 +128,29 @@
           <div class="macro-bars" id="macro-bars"></div>
           <div class="macro-bars micro-bars" id="micro-bars"></div>
           <div class="density-row" id="density-row"></div>
+        </div>
+
+        <!-- Ledger Points (WW-style) -->
+        <div class="points-card" id="points-card" hidden>
+          <div class="points-header">
+            <span id="points-title">Ledger Points</span>
+            <span class="points-phase" id="points-status">—</span>
+          </div>
+          <div class="points-main">
+            <div class="points-big">
+              <span class="points-value" id="points-remaining">—</span>
+              <span class="points-unit" id="points-remaining-label">left today</span>
+            </div>
+            <div class="points-stats">
+              <div class="points-stat"><span class="ps-l">Budget</span><span class="ps-v" id="points-budget">—</span></div>
+              <div class="points-stat"><span class="ps-l">Food</span><span class="ps-v" id="points-used">—</span></div>
+              <div class="points-stat"><span class="ps-l">Exercise</span><span class="ps-v accent" id="points-earned">—</span></div>
+            </div>
+          </div>
+          <div class="points-bar"><i id="points-progress"></i></div>
+          <p class="hint" id="points-hint" style="margin:0.45rem 0 0">
+            One number like Weight Watchers — protein costs less, sugar &amp; fat cost more.
+          </p>
         </div>
 
         <!-- Intermittent fasting -->
@@ -410,6 +433,28 @@
               </select>
             </label>
 
+            <h3 class="card-title span-2">Ledger Points (WW-style)</h3>
+            <p class="hint span-2" style="margin:0">
+              A single daily number like Weight Watchers — not official WW. Higher protein foods use fewer points;
+              sweets and fatty foods use more. Great if you prefer one number over juggling every macro.
+            </p>
+            <label>Points tracker
+              <select name="points_enabled" id="set-points-enabled">
+                <option value="1">On</option>
+                <option value="0">Off</option>
+              </select>
+            </label>
+            <label>Daily points budget
+              <input name="points_budget" id="set-points-budget" type="number" min="10" max="120" step="1" placeholder="Auto from calories" />
+            </label>
+            <label class="span-2">Exercise earns points back
+              <select name="points_from_exercise" id="set-points-exercise">
+                <option value="1">On (~1 pt per 100 cal burned)</option>
+                <option value="0">Off</option>
+              </select>
+            </label>
+            <p class="hint span-2" id="points-goals-summary" style="margin:0">—</p>
+
             <h3 class="card-title span-2">Intermittent fasting</h3>
             <p class="hint span-2" style="margin:0">
               Choose any schedule — 12:12, 14:10, 16:8, 18:6, 20:4, OMAD, or custom hours.
@@ -536,11 +581,11 @@
           </p>
           <div class="logo-preview-row">
             <figure class="logo-preview">
-              <img src="icons/logo-light.jpg?v=26" alt="MacroLedger light logo" />
+              <img src="icons/logo-light.jpg?v=27" alt="MacroLedger light logo" />
               <figcaption>Light</figcaption>
             </figure>
             <figure class="logo-preview">
-              <img src="icons/logo-dark.jpg?v=26" alt="MacroLedger dark logo" />
+              <img src="icons/logo-dark.jpg?v=27" alt="MacroLedger dark logo" />
               <figcaption>Dark</figcaption>
             </figure>
           </div>
@@ -758,6 +803,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=26"></script>
+  <script type="module" src="js/app.js?v=27"></script>
 </body>
 </html>

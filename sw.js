@@ -1,5 +1,5 @@
 /* MacroLedger service worker */
-const CACHE = "macroledger-v26";
+const CACHE = "macroledger-v27";
 const ASSETS = [
   "./",
   "./index.html",
@@ -16,6 +16,7 @@ const ASSETS = [
   "./js/persist.js",
   "./js/fasting.js",
   "./js/restaurant-builder.js",
+  "./js/points.js",
   "./js/app.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

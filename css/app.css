@@ -2362,3 +2362,93 @@ body {
 .advanced-details[open] summary {
   margin-bottom: 0.5rem;
 }
+
+
+/* Ledger Points (WW-style) */
+.chip.points {
+  background: rgba(245, 166, 35, 0.2);
+  color: #e8a838;
+  font-weight: 700;
+}
+.entry-pts {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #e8a838;
+  margin-top: 0.15rem;
+}
+.points-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.85rem;
+  box-shadow: var(--shadow);
+  border-left: 3px solid #e8a838;
+}
+.points-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+.points-phase {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+.points-phase.ok { background: rgba(0, 196, 122, 0.15); color: var(--accent); }
+.points-phase.low { background: rgba(245, 166, 35, 0.18); color: #e8a838; }
+.points-phase.over { background: rgba(232, 93, 117, 0.18); color: #ff8fa3; }
+.points-main {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.points-big { display: flex; flex-direction: column; min-width: 5.5rem; }
+.points-value {
+  font-family: var(--mono);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #e8a838;
+}
+.points-unit { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; }
+.points-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(4rem, 1fr));
+  gap: 0.5rem 0.75rem;
+  flex: 1;
+}
+.points-stat { display: flex; flex-direction: column; gap: 0.1rem; }
+.points-stat .ps-l {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.points-stat .ps-v { font-family: var(--mono); font-weight: 600; font-size: 0.95rem; }
+.points-stat .ps-v.accent { color: var(--accent); }
+.points-bar {
+  height: 8px;
+  background: var(--bg-elevated);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 0.65rem;
+}
+.points-bar > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #e8a838, #f0c14b);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.points-bar > i.over { background: linear-gradient(90deg, #e85d75, #ff8fa3); }

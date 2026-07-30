@@ -259,6 +259,10 @@ export const DEFAULT_SETTINGS = {
   sodium_goal: "2300",
   sugar_goal: "50",
   show_micros: "1",
+  // Ledger Points (WW-style)
+  points_enabled: "1",
+  points_budget: "",
+  points_from_exercise: "1",
   fasting_enabled: "0",
   fasting_protocol: "16:8",
   eating_window_start: "12:00",
