@@ -263,6 +263,8 @@ export const DEFAULT_SETTINGS = {
   points_enabled: "1",
   points_budget: "",
   points_from_exercise: "1",
+  /** Freestyle-style zero-point foods (eggs, lean poultry, fish, fruit, veg…) */
+  points_zero_foods: "1",
   fasting_enabled: "0",
   fasting_protocol: "16:8",
   eating_window_start: "12:00",

@@ -281,9 +281,13 @@ function MacroLedgers(p, c, f, opts = {}) {
     <span class="chip fat"><span class="chip-l">F</span> ${formatNum(f, 1)}g</span>
   </div>`;
 }
+function pointsOpts() {
+  return { zeroFoods: settings?.points_zero_foods !== "0" };
+}
+
 function ptsFor(n) {
   if (!n || settings?.points_enabled === "0") return null;
-  return foodPoints(n);
+  return foodPoints(n, pointsOpts());
 }
 function downloadBlob(filename, blob) {
   const a = document.createElement("a");
@@ -458,7 +462,7 @@ async function renderQuickRail(mode) {
     .map(
       (f) => `<button type="button" class="quick-pill" data-id="${f.id}">
       <div class="qp-name">${escapeHtml(f.name)}</div>
-      <div class="qp-cal">${formatNum(f.calories)} cal${settings?.points_enabled !== "0" ? ` · ${formatPoints(foodPoints(f))} pts` : ""} � tap to add</div>
+      <div class="qp-cal">${formatNum(f.calories)} cal${settings?.points_enabled !== "0" ? ` · ${formatPoints(foodPoints(f, pointsOpts()))} pts` : ""} � tap to add</div>
     </button>`
     )
     .join("");
@@ -591,7 +595,7 @@ function renderMeals(d) {
       </div>`
       )
       .join("");
-    const mealPts = entries.reduce((s, e) => s + (foodPoints(e) || 0), 0);
+    const mealPts = entries.reduce((s, e) => s + (foodPoints(e, pointsOpts()) || 0), 0);
     const mealMacros =
       entries.length > 0
         ? `<div class="meal-macro-row">${MacroLedgers(mt.protein, mt.carbs, mt.fat, {
@@ -1116,6 +1120,7 @@ async function loadGoals() {
     "set-points-enabled": "points_enabled",
     "set-points-budget": "points_budget",
     "set-points-exercise": "points_from_exercise",
+    "set-points-zero": "points_zero_foods",
     "set-fasting-enabled": "fasting_enabled",
     "set-fasting-protocol": "fasting_protocol",
     "set-eating-start": "eating_window_start",
