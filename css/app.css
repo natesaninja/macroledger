@@ -1586,6 +1586,17 @@ select:focus {
   font-variant-numeric: tabular-nums;
 }
 
+.search-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.55rem 0.25rem 0.3rem;
+  letter-spacing: 0.02em;
+}
+.result-item.online-hit .badge {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
 .search-results {
   display: flex;
   flex-direction: column;

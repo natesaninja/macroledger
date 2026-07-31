@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=29" />
-  <link rel="icon" href="icons/icon-192.png?v=29" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=29" />
+  <link rel="manifest" href="manifest.webmanifest?v=30" />
+  <link rel="icon" href="icons/icon-192.png?v=30" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=30" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=29" />
+  <link rel="stylesheet" href="css/app.css?v=30" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">Streak 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">v29</span>
+      <span id="app-version" class="app-version">v30</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -76,7 +76,7 @@
         <img
           class="brand-mark"
           id="brand-logo"
-          src="icons/logo-mark-light.png?v=29"
+          src="icons/logo-mark-light.png?v=30"
           width="72"
           height="72"
           alt="MacroLedger"
@@ -588,11 +588,11 @@
           </p>
           <div class="logo-preview-row">
             <figure class="logo-preview">
-              <img src="icons/logo-light.jpg?v=29" alt="MacroLedger light logo" />
+              <img src="icons/logo-light.jpg?v=30" alt="MacroLedger light logo" />
               <figcaption>Light</figcaption>
             </figure>
             <figure class="logo-preview">
-              <img src="icons/logo-dark.jpg?v=29" alt="MacroLedger dark logo" />
+              <img src="icons/logo-dark.jpg?v=30" alt="MacroLedger dark logo" />
               <figcaption>Dark</figcaption>
             </figure>
           </div>
@@ -693,7 +693,10 @@
           </p>
         </div>
         <p class="barcode-status" id="barcode-status" hidden></p>
-        <input type="search" id="food-search" class="search-input" placeholder="Search foods…" />
+        <input type="search" id="food-search" class="search-input" placeholder="Search foods (online fills macros)…" />
+        <p class="hint" style="margin:0.35rem 0 0.5rem">
+          Type a name (e.g. greek yogurt). Local matches first; online results fill calories &amp; macros for you. Needs internet.
+        </p>
         <div class="servings-row" id="servings-row" hidden>
           <label>Servings<input type="number" id="servings-input" min="0.1" step="0.25" value="1" /></label>
           <div class="preview-macros" id="preview-macros"></div>
@@ -810,6 +813,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=29"></script>
+  <script type="module" src="js/app.js?v=30"></script>
 </body>
 </html>

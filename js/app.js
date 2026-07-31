@@ -81,6 +81,7 @@ import {
   decodeBarcodeFromFile,
   cameraHelp,
 } from "./barcode-scan.js";
+import { searchOpenFoodFacts } from "./food-search.js";
 import {
   loadLocalBackup,
   loadProfileBackup,
@@ -150,8 +151,8 @@ function updateBrandLogo(themeId) {
   if (!img) return;
   const light = themeId === "light" || themeId === "ocean";
   const src = light
-    ? "icons/logo-mark-light.png?v=29"
-    : "icons/logo-mark-dark.png?v=29";
+    ? "icons/logo-mark-light.png?v=30"
+    : "icons/logo-mark-dark.png?v=30";
   if (img.getAttribute("src") !== src) img.setAttribute("src", src);
   img.alt = light ? "MacroLedger" : "MacroLedger (dark)";
 }
@@ -725,30 +726,120 @@ function closeModal() {
   document.getElementById("add-modal").hidden = true;
 }
 
+/** Online search hits for current modal query (not yet in local DB). */
+let onlineHits = [];
+
 async function doSearch(q) {
-  const foods = await searchFoods(q, 30);
+  const query = String(q || "").trim();
+  const local = await searchFoods(query, 30);
   const box = document.getElementById("search-results");
-  if (!foods.length) {
-    box.innerHTML = `<div class="empty-state">No foods found.</div>`;
-    return;
-  }
-  box.innerHTML = foods
-    .map(
-      (f) => `
-    <button type="button" class="result-item" data-id="${f.id}">
-      <div class="rname">${escapeHtml(f.name)}${f.is_custom ? '<span class="badge">Custom</span>' : ""}</div>
-      <div class="rmeta">${escapeHtml(f.serving_size)}</div>
+  onlineHits = [];
+
+  let html = "";
+  if (local.length) {
+    html += local
+      .map(
+        (f) => `
+    <button type="button" class="result-item" data-local-id="${f.id}">
+      <div class="rname">${escapeHtml(f.name)}${f.is_custom ? '<span class="badge">Custom</span>' : f.brand ? `<span class="badge">${escapeHtml(f.brand)}</span>` : ""}</div>
+      <div class="rmeta">${escapeHtml(f.serving_size || "")}${f.brand && !f.is_custom ? " · " + escapeHtml(f.brand) : ""}</div>
       ${MacroLedgers(f.protein, f.carbs, f.fat, {
         calories: f.calories,
         points: ptsFor(f),
       })}
     </button>`
-    )
-    .join("");
-  box.querySelectorAll(".result-item").forEach((el) => {
+      )
+      .join("");
+  }
+
+  // Name search online when typing 2+ chars — macros filled for you (Open Food Facts)
+  if (query.length >= 2 && navigator.onLine) {
+    html += `<div class="search-section-label" id="online-search-status">Searching online for macros…</div>`;
+    box.innerHTML =
+      html ||
+      `<div class="empty-state">No local foods — searching online…</div>`;
+    bindLocalSearchClicks(box, local);
+    try {
+      onlineHits = await searchOpenFoodFacts(query, 12);
+      const status = document.getElementById("online-search-status");
+      if (!onlineHits.length) {
+        if (status) status.textContent = "No online matches — try barcode or custom food";
+        else if (!local.length) {
+          box.innerHTML = `<div class="empty-state">No foods found. Try barcode, different words, or Quick add.</div>`;
+        }
+        return;
+      }
+      const onlineHtml = onlineHits
+        .map(
+          (f, i) => `
+    <button type="button" class="result-item online-hit" data-online-i="${i}">
+      <div class="rname">${escapeHtml(f.name)}<span class="badge">Online</span>${
+        f.brand ? `<span class="badge">${escapeHtml(f.brand)}</span>` : ""
+      }</div>
+      <div class="rmeta">${escapeHtml(f.serving_size || "1 serving")} · macros filled</div>
+      ${MacroLedgers(f.protein, f.carbs, f.fat, {
+        calories: f.calories,
+        points: ptsFor(f),
+      })}
+    </button>`
+        )
+        .join("");
+      if (status) {
+        status.textContent = `Online results (${onlineHits.length}) — tap to use (no typing macros)`;
+        status.insertAdjacentHTML("afterend", onlineHtml);
+      } else {
+        box.innerHTML =
+          (local.length ? html : "") +
+          `<div class="search-section-label">Online results — macros filled</div>` +
+          onlineHtml;
+        bindLocalSearchClicks(box, local);
+      }
+      bindOnlineSearchClicks(box);
+    } catch (err) {
+      console.warn("online food search failed", err);
+      const status = document.getElementById("online-search-status");
+      if (status) status.textContent = "Online search failed — use barcode or local foods";
+      else if (!local.length) {
+        box.innerHTML = `<div class="empty-state">Online search failed. Check internet or use barcode.</div>`;
+      }
+    }
+    return;
+  }
+
+  if (!local.length) {
+    box.innerHTML = `<div class="empty-state">${
+      query
+        ? "No local foods. Type more letters for online search, or scan a barcode."
+        : "Type a food name — online search fills macros when you’re connected."
+    }</div>`;
+    return;
+  }
+  box.innerHTML = html;
+  bindLocalSearchClicks(box, local);
+}
+
+function bindLocalSearchClicks(box, foods) {
+  box.querySelectorAll(".result-item[data-local-id]").forEach((el) => {
     el.addEventListener("click", () => {
-      selectedFood = foods.find((f) => f.id === Number(el.dataset.id));
+      selectedFood = foods.find((f) => f.id === Number(el.dataset.localId));
       pendingOff = null;
+      box.querySelectorAll(".result-item").forEach((x) => x.classList.remove("selected"));
+      el.classList.add("selected");
+      document.getElementById("servings-row").hidden = false;
+      document.getElementById("add-selected").disabled = false;
+      updatePreview();
+    });
+  });
+}
+
+function bindOnlineSearchClicks(box) {
+  box.querySelectorAll(".result-item[data-online-i]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const i = Number(el.dataset.onlineI);
+      const food = onlineHits[i];
+      if (!food) return;
+      selectedFood = null;
+      pendingOff = { ...food };
       box.querySelectorAll(".result-item").forEach((x) => x.classList.remove("selected"));
       el.classList.add("selected");
       document.getElementById("servings-row").hidden = false;
