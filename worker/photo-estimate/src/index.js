@@ -38,6 +38,35 @@ Rules:
 - Include every major item on the plate/bowl. Skip empty plates and pure drinks unless clearly caloric.
 - Do not ask questions. Best estimate only. If no food, return {"items":[],"notes":"No food detected"}.`;
 
+const LABEL_PROMPT = `You are reading a Nutrition Facts label on packaged food.
+Extract the label values for ONE serving (or as printed). Return JSON only (no markdown):
+{
+  "items": [
+    {
+      "name": "product name if visible else generic name",
+      "portion": "serving size text from label e.g. 1 cup (240ml) or 28g",
+      "calories": 0,
+      "protein": 0,
+      "carbs": 0,
+      "fat": 0,
+      "fiber": 0,
+      "sugar": 0,
+      "sodium_mg": 0,
+      "confidence": 0.0
+    }
+  ],
+  "notes": "optional"
+}
+Rules:
+- Use numbers from the label (Calories, Total Fat, Total Carbohydrate, Dietary Fiber, Total Sugars, Protein, Sodium).
+- sodium_mg in milligrams; protein/carbs/fat/fiber/sugar in grams.
+- confidence 0-1. If not a nutrition label: {"items":[],"notes":"No nutrition facts label detected"}.
+- One product only — not a multi-item plate.`;
+
+function promptForMode(mode) {
+  return mode === "label" ? LABEL_PROMPT : PROMPT;
+}
+
 function corsHeaders(origin) {
   return {
     "Access-Control-Allow-Origin": origin || "*",
@@ -166,7 +195,7 @@ function base64ToUint8Array(b64) {
 /**
  * Cloudflare Workers AI vision — no external API key for users.
  */
-async function callWorkersAI(env, imageBase64) {
+async function callWorkersAI(env, imageBase64, mode = "meal") {
   if (!env.AI) {
     return { ok: false, status: 500, body: { error: "Photo AI not available right now.", code: "config" } };
   }
@@ -176,9 +205,9 @@ async function callWorkersAI(env, imageBase64) {
   try {
     const result = await env.AI.run(model, {
       image,
-      prompt: PROMPT,
+      prompt: promptForMode(mode),
       max_tokens: 1200,
-      temperature: 0.2,
+      temperature: 0.15,
     });
 
     const text =
@@ -236,7 +265,7 @@ async function callWorkersAI(env, imageBase64) {
   }
 }
 
-async function callGemini(env, imageBase64, mimeType) {
+async function callGemini(env, imageBase64, mimeType, mode = "meal") {
   const key = env.GEMINI_API_KEY;
   if (!key) {
     return { ok: false, status: 500, body: { error: "Photo AI not configured.", code: "config" } };
@@ -251,7 +280,7 @@ async function callGemini(env, imageBase64, mimeType) {
       contents: [
         {
           parts: [
-            { text: PROMPT },
+            { text: promptForMode(mode) },
             {
               inline_data: {
                 mime_type: mimeType || "image/jpeg",
@@ -262,7 +291,7 @@ async function callGemini(env, imageBase64, mimeType) {
         },
       ],
       generationConfig: {
-        temperature: 0.2,
+        temperature: 0.15,
         responseMimeType: "application/json",
       },
     }),
@@ -299,20 +328,20 @@ async function callGemini(env, imageBase64, mimeType) {
   }
 }
 
-async function estimate(env, imageBase64, mimeType) {
+async function estimate(env, imageBase64, mimeType, mode = "meal") {
   // Prefer Workers AI (zero setup for app users)
   if (env.AI) {
-    const w = await callWorkersAI(env, imageBase64);
+    const w = await callWorkersAI(env, imageBase64, mode);
     if (w.ok) return w;
     // Fall through to Gemini if configured
     if (env.GEMINI_API_KEY) {
-      const g = await callGemini(env, imageBase64, mimeType);
+      const g = await callGemini(env, imageBase64, mimeType, mode);
       if (g.ok) return g;
       return w; // prefer first error if both fail
     }
     return w;
   }
-  if (env.GEMINI_API_KEY) return callGemini(env, imageBase64, mimeType);
+  if (env.GEMINI_API_KEY) return callGemini(env, imageBase64, mimeType, mode);
   return {
     ok: false,
     status: 500,
@@ -359,6 +388,7 @@ export default {
 
     const imageBase64 = body.imageBase64 || body.base64 || "";
     const mimeType = body.mimeType || body.mime_type || "image/jpeg";
+    const mode = body.mode === "label" ? "label" : "meal";
     if (!imageBase64 || imageBase64.length < 100) {
       return json({ error: "No photo received. Try taking the picture again." }, 400, origin);
     }
@@ -369,7 +399,7 @@ export default {
     const limits = await checkAndBumpLimits(env, request);
     if (!limits.ok) return json(limits.body, limits.status, origin);
 
-    const result = await estimate(env, imageBase64, mimeType);
+    const result = await estimate(env, imageBase64, mimeType, mode);
     if (!result.ok) return json(result.body, result.status, origin);
 
     const items = Array.isArray(result.parsed?.items) ? result.parsed.items : [];
@@ -380,6 +410,7 @@ export default {
         remaining: limits.remaining,
         free: true,
         via: result.via || "unknown",
+        mode,
       },
       200,
       origin

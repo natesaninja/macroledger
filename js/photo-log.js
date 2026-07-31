@@ -36,6 +36,35 @@ Rules:
 - Include every major item on the plate/bowl. Skip empty plates and pure drinks unless clearly caloric.
 - Do not ask questions. Best estimate only. If no food, return {"items":[],"notes":"No food detected"}.`;
 
+/** Nutrition Facts panel OCR-style extraction */
+const LABEL_PROMPT = `You are reading a Nutrition Facts label on packaged food.
+Extract the label values for ONE serving (or as printed). Return JSON only (no markdown):
+{
+  "items": [
+    {
+      "name": "product name if visible else generic name",
+      "portion": "serving size text from label e.g. 1 cup (240ml) or 28g",
+      "calories": 0,
+      "protein": 0,
+      "carbs": 0,
+      "fat": 0,
+      "fiber": 0,
+      "sugar": 0,
+      "sodium_mg": 0,
+      "servings_per_container": null,
+      "confidence": 0.0
+    }
+  ],
+  "notes": "optional"
+}
+Rules:
+- Use numbers from the label (Calories, Total Fat, Total Carbohydrate, Dietary Fiber, Total Sugars, Protein, Sodium).
+- sodium_mg must be milligrams (if label says 150mg use 150; if only grams convert).
+- protein/carbs/fat/fiber/sugar in grams.
+- confidence 0-1 (lower if blurry or partial label).
+- If not a nutrition label, return {"items":[],"notes":"No nutrition facts label detected"}.
+- Do not invent a multi-item plate meal — one product only.`;
+
 function todayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -136,12 +165,14 @@ function normalizeItems(payload) {
       carbs: round1(it.carbs ?? it.carbohydrates),
       fat: round1(it.fat),
       fiber: round1(it.fiber),
+      sugar: round1(it.sugar ?? it.sugar_g ?? it.sugars),
+      sodium_mg: round1(it.sodium_mg ?? (it.sodium != null ? Number(it.sodium) : 0)),
       confidence: Math.min(1, Math.max(0.15, Number(it.confidence) || 0.55)),
     }))
     .filter((it) => it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0 || it.name);
 }
 
-function itemsToDrafts(items, meal) {
+function itemsToDrafts(items, meal, source = "photo") {
   return items.map((it) => ({
     food_id: null,
     food_name: it.name,
@@ -152,19 +183,28 @@ function itemsToDrafts(items, meal) {
     carbs: it.carbs,
     fat: it.fat,
     fiber: it.fiber,
+    sugar_g: it.sugar != null ? it.sugar : 0,
+    sodium_mg: it.sodium_mg != null ? it.sodium_mg : 0,
     meal,
     confidence: it.confidence,
-    source: "photo",
+    source,
     user_verified: false,
     needs_review: it.confidence < 0.8,
-    note: it.confidence < 0.8 ? "Photo estimate — confirm" : "Photo estimate",
+    note:
+      source === "label"
+        ? it.confidence < 0.8
+          ? "Label scan — confirm numbers"
+          : "From nutrition label"
+        : it.confidence < 0.8
+          ? "Photo estimate — confirm"
+          : "Photo estimate",
   }));
 }
 
 /**
  * @param {File|Blob} file
  * @param {string} meal
- * @param {{ proxyUrl?: string, geminiKey?: string, dailyLimit?: number }} config
+ * @param {{ proxyUrl?: string, geminiKey?: string, dailyLimit?: number, mode?: 'meal'|'label' }} config
  */
 export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
   if (!file) throw new PhotoLogError("No photo selected", "no_file");
@@ -175,6 +215,7 @@ export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
     );
   }
 
+  const mode = config.mode === "label" ? "label" : "meal";
   const limit = config.dailyLimit ?? CLIENT_DAILY_LIMIT;
   const remaining = photoScansRemaining(limit);
   if (remaining <= 0) {
@@ -193,32 +234,49 @@ export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
     );
   }
 
-  const compressed = await compressFoodImage(file);
+  const compressed = await compressFoodImage(file, {
+    maxEdge: mode === "label" ? 1600 : 1280,
+    quality: mode === "label" ? 0.85 : 0.72,
+  });
   let payload;
 
   if (proxyUrl) {
-    payload = await callProxy(proxyUrl, compressed);
+    payload = await callProxy(proxyUrl, compressed, mode);
   } else {
-    payload = await callGeminiDirect(geminiKey, compressed);
+    payload = await callGeminiDirect(geminiKey, compressed, mode);
+  }
+
+  // Label responses may also use product-level fields
+  if (mode === "label" && payload && !payload.items && (payload.calories != null || payload.name)) {
+    payload = { items: [payload], notes: payload.notes || "" };
   }
 
   const items = normalizeItems(payload);
   if (!items.length) {
     throw new PhotoLogError(
-      payload?.notes || "No food detected in the photo. Try a clearer top-down shot.",
+      payload?.notes ||
+        (mode === "label"
+          ? "No nutrition facts label detected. Fill the frame with the label, better light."
+          : "No food detected in the photo. Try a clearer top-down shot."),
       "empty"
     );
   }
 
   bumpPhotoUsage();
   return {
-    drafts: itemsToDrafts(items, meal),
+    drafts: itemsToDrafts(items, meal, mode === "label" ? "label" : "photo"),
     remaining: photoScansRemaining(limit),
     notes: payload?.notes || "",
+    mode,
   };
 }
 
-async function callProxy(proxyUrl, compressed) {
+/** Convenience: scan a Nutrition Facts panel → one food draft. */
+export async function estimateLabelFromPhoto(file, meal = "snacks", config = {}) {
+  return estimateMealFromPhoto(file, meal, { ...config, mode: "label" });
+}
+
+async function callProxy(proxyUrl, compressed, mode = "meal") {
   const endpoint = proxyUrl.endsWith("/estimate") ? proxyUrl : `${proxyUrl}/estimate`;
   const res = await fetch(endpoint, {
     method: "POST",
@@ -226,6 +284,7 @@ async function callProxy(proxyUrl, compressed) {
     body: JSON.stringify({
       imageBase64: compressed.base64,
       mimeType: compressed.mimeType,
+      mode: mode === "label" ? "label" : "meal",
     }),
   });
 
@@ -252,9 +311,10 @@ async function callProxy(proxyUrl, compressed) {
   return body;
 }
 
-async function callGeminiDirect(apiKey, compressed) {
+async function callGeminiDirect(apiKey, compressed, mode = "meal") {
   const model = "gemini-2.5-flash-lite";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const prompt = mode === "label" ? LABEL_PROMPT : ESTIMATE_PROMPT;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -262,7 +322,7 @@ async function callGeminiDirect(apiKey, compressed) {
       contents: [
         {
           parts: [
-            { text: ESTIMATE_PROMPT },
+            { text: prompt },
             {
               inline_data: {
                 mime_type: compressed.mimeType,
@@ -273,7 +333,7 @@ async function callGeminiDirect(apiKey, compressed) {
         },
       ],
       generationConfig: {
-        temperature: 0.2,
+        temperature: 0.15,
         responseMimeType: "application/json",
       },
     }),
@@ -307,4 +367,4 @@ export class PhotoLogError extends Error {
 }
 
 /** Exported for Worker reuse / tests */
-export { ESTIMATE_PROMPT };
+export { ESTIMATE_PROMPT, LABEL_PROMPT };

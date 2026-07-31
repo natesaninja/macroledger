@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=31" />
-  <link rel="icon" href="icons/icon-192.png?v=31" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=31" />
+  <link rel="manifest" href="manifest.webmanifest?v=32" />
+  <link rel="icon" href="icons/icon-192.png?v=32" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=32" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=31" />
+  <link rel="stylesheet" href="css/app.css?v=32" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">Streak 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">v31</span>
+      <span id="app-version" class="app-version">v32</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -76,7 +76,7 @@
         <img
           class="brand-mark"
           id="brand-logo"
-          src="icons/logo-mark-light.png?v=31"
+          src="icons/logo-mark-light.png?v=32"
           width="72"
           height="72"
           alt="MacroLedger"
@@ -207,6 +207,7 @@
           <div class="quick-log-title">Quick log</div>
           <div class="quick-actions">
             <button type="button" class="chip-btn" id="btn-photo-log">Photo meal</button>
+            <button type="button" class="chip-btn" id="btn-scan-label">Scan label</button>
             <button type="button" class="chip-btn" id="btn-scan-barcode">Barcode</button>
             <button type="button" class="chip-btn" id="btn-voice-log">Voice / text</button>
             <button type="button" class="chip-btn" id="btn-restaurant-build">Restaurant</button>
@@ -216,8 +217,9 @@
             <button type="button" class="chip-btn" id="btn-show-favs">Favorites</button>
           </div>
           <input type="file" id="photo-log-input" accept="image/*" capture="environment" hidden />
+          <input type="file" id="label-scan-input" accept="image/*" capture="environment" hidden />
           <p class="hint photo-log-hint" id="photo-log-hint" style="margin:0.45rem 0 0">
-            Snap your plate — we estimate calories for you. Free, a few times per day. Needs internet.
+            Photo meal = plate. Scan label = Nutrition Facts panel (macros filled for you). Free daily limit. Needs internet.
           </p>
           <div class="quick-rail" id="quick-rail"></div>
         </div>
@@ -315,6 +317,18 @@
           <div class="rb-formats" id="rb-formats"></div>
           <div id="rb-groups"></div>
           <div class="metabolism-panel" id="rb-totals">Pick items to see macros + sodium/sugar</div>
+          <div class="portion-split" style="margin-top:0.75rem">
+            <div class="portion-title">Share of the pot</div>
+            <div class="portion-row">
+              <label>Cooked for / order size
+                <input type="number" id="portion-cooked-rb" min="0.25" step="0.25" value="1" />
+              </label>
+              <label>I ate
+                <input type="number" id="portion-mine-rb" min="0.25" step="0.25" value="1" />
+              </label>
+            </div>
+            <p class="hint portion-hint" id="portion-hint-rb" style="margin:0.35rem 0 0">Logging the full amount (no split).</p>
+          </div>
           <div class="form-actions" style="margin-top:0.75rem">
             <button type="button" class="primary-btn" id="rb-log-btn">Log this meal</button>
             <button type="button" class="ghost-btn" id="rb-save-btn">Save as meal</button>
@@ -567,6 +581,34 @@
         </div>
 
         <div class="card info-card">
+          <h3 class="card-title">Share of the pot (household portions)</h3>
+          <p class="hint" style="margin-top:0">
+            Cooked one meal for the family? Log <strong>only your share</strong> without doing math by hand.
+          </p>
+          <ol class="info-steps">
+            <li>Build or review a meal (photo, restaurant, or add food).</li>
+            <li>Set <strong>Cooked for</strong> (e.g. 4) and <strong>I ate</strong> (e.g. 1).</li>
+            <li>Save — diary gets ~25% of the macros (1 of 4).</li>
+            <li>Optional: <strong>Save all + meal</strong> so you can re-log your usual share later.</li>
+          </ol>
+          <p class="hint">Leave both at 1 when you’re logging the full plate for yourself only.</p>
+        </div>
+
+        <div class="card info-card">
+          <h3 class="card-title">Scan nutrition label</h3>
+          <p class="hint" style="margin-top:0">
+            Point at a package <strong>Nutrition Facts</strong> panel — we fill calories and macros for you.
+          </p>
+          <ol class="info-steps">
+            <li>Diary → <strong>Scan label</strong> (or Add food → Scan label).</li>
+            <li>Photo the whole facts panel in good light (flat, no glare).</li>
+            <li>Review the numbers, set servings or share-of-pot if needed.</li>
+            <li>Save — also saves to your foods list when added from search/add.</li>
+          </ol>
+          <p class="hint">Uses the same free daily photo limit as Photo meal. Barcode is still best when a UPC is on the package.</p>
+        </div>
+
+        <div class="card info-card">
           <h3 class="card-title">Photo meal — log food from a picture</h3>
           <p class="hint" style="margin-top:0">
             No setup. Snap your plate; we estimate calories and macros. Needs internet.
@@ -596,11 +638,11 @@
           </p>
           <div class="logo-preview-row">
             <figure class="logo-preview">
-              <img src="icons/logo-light.jpg?v=31" alt="MacroLedger light logo" />
+              <img src="icons/logo-light.jpg?v=32" alt="MacroLedger light logo" />
               <figcaption>Light</figcaption>
             </figure>
             <figure class="logo-preview">
-              <img src="icons/logo-dark.jpg?v=31" alt="MacroLedger dark logo" />
+              <img src="icons/logo-dark.jpg?v=32" alt="MacroLedger dark logo" />
               <figcaption>Dark</figcaption>
             </figure>
           </div>
@@ -709,9 +751,25 @@
           <label>Servings<input type="number" id="servings-input" min="0.1" step="0.25" value="1" /></label>
           <div class="preview-macros" id="preview-macros"></div>
         </div>
+        <div class="portion-split" id="portion-split-add" hidden>
+          <div class="portion-title">Share of the pot</div>
+          <div class="portion-row">
+            <label>Cooked for
+              <input type="number" id="portion-cooked-add" min="0.25" step="0.25" value="1" />
+            </label>
+            <label>I ate
+              <input type="number" id="portion-mine-add" min="0.25" step="0.25" value="1" />
+            </label>
+          </div>
+          <p class="hint portion-hint" id="portion-hint-add" style="margin:0.35rem 0 0">Logging the full amount (no split).</p>
+        </div>
         <div class="search-results" id="search-results"></div>
         <div class="modal-footer">
           <button type="button" class="ghost-btn" id="quick-add-toggle">Quick add</button>
+          <label class="ghost-btn export-link" style="cursor:pointer" id="add-scan-label-btn">
+            Scan label
+            <input type="file" id="add-label-input" accept="image/*" capture="environment" hidden />
+          </label>
           <button type="button" class="primary-btn" id="add-selected" disabled>Add</button>
         </div>
         <form id="quick-add-form" class="quick-add" hidden>
@@ -778,6 +836,19 @@
             <option value="snacks">Snacks</option>
           </select>
         </label>
+        <div class="portion-split" id="portion-split-review">
+          <div class="portion-title">Share of the pot</div>
+          <p class="hint" style="margin:0 0 0.45rem">Cooked a batch for the household? Log only your share.</p>
+          <div class="portion-row">
+            <label>Cooked for
+              <input type="number" id="portion-cooked-review" min="0.25" step="0.25" value="1" />
+            </label>
+            <label>I ate
+              <input type="number" id="portion-mine-review" min="0.25" step="0.25" value="1" />
+            </label>
+          </div>
+          <p class="hint portion-hint" id="portion-hint-review" style="margin:0.35rem 0 0">Logging the full amount (no split).</p>
+        </div>
         <div id="review-list" class="review-list"></div>
         <div class="modal-footer" style="margin-top:1rem">
           <button type="button" class="ghost-btn" id="review-discard">Discard</button>
@@ -785,7 +856,7 @@
           <button type="button" class="primary-btn" id="review-save">Save all ✓</button>
         </div>
         <p class="hint" style="margin:0.5rem 0 0">
-          <strong>Save all + meal</strong> logs the food and stores a named meal for Quick log → Meals.
+          <strong>Save all + meal</strong> logs your share and stores a named meal for Quick log → Meals.
         </p>
       </div>
     </div>
@@ -855,6 +926,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=31"></script>
+  <script type="module" src="js/app.js?v=32"></script>
 </body>
 </html>

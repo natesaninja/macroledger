@@ -60,12 +60,20 @@ import {
 import { parseFoodUtterance } from "./nlp-log.js";
 import {
   estimateMealFromPhoto,
+  estimateLabelFromPhoto,
   photoScansRemaining,
   isPhotoLogConfigured,
   DEFAULT_PHOTO_PROXY_URL,
   CLIENT_DAILY_LIMIT,
   PhotoLogError,
 } from "./photo-log.js";
+import {
+  readPortionInputs,
+  scaleMacros,
+  scaleItemList,
+  portionHint,
+  clampPortion,
+} from "./portion.js";
 import { proposeAdaptiveTargets, applyAdaptiveProposal } from "./adaptive.js";
 import { getFastingStatus, fmtDuration, PROTOCOLS, protocolSummary } from "./fasting.js";
 import {
@@ -157,8 +165,8 @@ function updateBrandLogo(themeId) {
   if (!img) return;
   const light = themeId === "light" || themeId === "ocean";
   const src = light
-    ? "icons/logo-mark-light.png?v=31"
-    : "icons/logo-mark-dark.png?v=31";
+    ? "icons/logo-mark-light.png?v=32"
+    : "icons/logo-mark-dark.png?v=32";
   if (img.getAttribute("src") !== src) img.setAttribute("src", src);
   img.alt = light ? "MacroLedger" : "MacroLedger (dark)";
 }
@@ -828,6 +836,9 @@ function openModal(meal) {
   document.getElementById("add-selected").disabled = true;
   document.getElementById("quick-add-form").hidden = true;
   document.getElementById("barcode-status").hidden = true;
+  const pAdd = document.getElementById("portion-split-add");
+  if (pAdd) pAdd.hidden = true;
+  resetPortionFields("add");
   document.querySelectorAll("#meal-pills .pill").forEach((p) =>
     p.classList.toggle("active", p.dataset.meal === meal)
   );
@@ -945,6 +956,8 @@ function bindLocalSearchClicks(box, foods) {
       box.querySelectorAll(".result-item").forEach((x) => x.classList.remove("selected"));
       el.classList.add("selected");
       document.getElementById("servings-row").hidden = false;
+      const pAdd = document.getElementById("portion-split-add");
+      if (pAdd) pAdd.hidden = false;
       document.getElementById("add-selected").disabled = false;
       if (selectedFood) await applyDefaultServings(selectedFood.id, selectedFood.name);
       updatePreview();
@@ -963,6 +976,8 @@ function bindOnlineSearchClicks(box) {
       box.querySelectorAll(".result-item").forEach((x) => x.classList.remove("selected"));
       el.classList.add("selected");
       document.getElementById("servings-row").hidden = false;
+      const pAdd = document.getElementById("portion-split-add");
+      if (pAdd) pAdd.hidden = false;
       document.getElementById("add-selected").disabled = false;
       await applyDefaultServings(null, food.name);
       updatePreview();
@@ -1634,6 +1649,46 @@ function setupOnboarding() {
   };
 }
 
+// ---- Household portion helpers ----
+function resetPortionFields(which = "all") {
+  const pairs = [
+    ["portion-cooked-review", "portion-mine-review", "portion-hint-review"],
+    ["portion-cooked-add", "portion-mine-add", "portion-hint-add"],
+    ["portion-cooked-rb", "portion-mine-rb", "portion-hint-rb"],
+  ];
+  for (const [c, m, h] of pairs) {
+    if (which === "review" && !c.includes("review")) continue;
+    if (which === "add" && !c.includes("add")) continue;
+    if (which === "rb" && !c.includes("rb")) continue;
+    const ce = document.getElementById(c);
+    const me = document.getElementById(m);
+    const he = document.getElementById(h);
+    if (ce) ce.value = "1";
+    if (me) me.value = "1";
+    if (he) he.textContent = portionHint(1, 1);
+  }
+}
+
+function wirePortionHints() {
+  const bind = (cookedId, mineId, hintId) => {
+    const update = () => {
+      const c = clampPortion(document.getElementById(cookedId)?.value, 1);
+      const m = clampPortion(document.getElementById(mineId)?.value, 1);
+      const he = document.getElementById(hintId);
+      if (he) he.textContent = portionHint(c, m);
+    };
+    document.getElementById(cookedId)?.addEventListener("input", update);
+    document.getElementById(mineId)?.addEventListener("input", update);
+  };
+  bind("portion-cooked-review", "portion-mine-review", "portion-hint-review");
+  bind("portion-cooked-add", "portion-mine-add", "portion-hint-add");
+  bind("portion-cooked-rb", "portion-mine-rb", "portion-hint-rb");
+}
+
+function getActivePortion() {
+  return readPortionInputs(document);
+}
+
 // ---- Edit diary entry (servings + macros) ----
 function openEditEntry(entry) {
   if (!entry?.id) return;
@@ -1678,37 +1733,57 @@ async function ensurePhotoLogReady() {
   return true;
 }
 
-async function runPhotoMealEstimate(file) {
+async function runPhotoMealEstimate(file, mode = "meal") {
   if (photoBusy) return;
   photoBusy = true;
   const busy = document.getElementById("photo-busy-modal");
+  const busyTitle = document.getElementById("photo-busy-title");
+  if (busyTitle) {
+    busyTitle.textContent =
+      mode === "label" ? "Reading nutrition label…" : "Estimating meal…";
+  }
   if (busy) busy.hidden = false;
   try {
     if (!settings) settings = await getSettings();
     if (!isPhotoLogConfigured(settings)) {
-      toast("Photo meal isn’t available right now. Try barcode or voice instead.");
+      toast(
+        mode === "label"
+          ? "Label scan isn’t available right now. Try barcode or search."
+          : "Photo meal isn’t available right now. Try barcode or voice instead."
+      );
       return;
     }
     const meal = guessMealSlot();
     document.getElementById("review-meal").value = meal;
-    const result = await estimateMealFromPhoto(file, meal, {
+    const cfg = {
       proxyUrl: settings.photo_proxy_url || undefined,
       geminiKey: settings.photo_gemini_key || "",
       dailyLimit: CLIENT_DAILY_LIMIT,
-    });
+      mode: mode === "label" ? "label" : "meal",
+    };
+    const result =
+      mode === "label"
+        ? await estimateLabelFromPhoto(file, meal, cfg)
+        : await estimateMealFromPhoto(file, meal, cfg);
     openReview(result.drafts);
     updatePhotoLogStatus();
     toast(
-      result.remaining != null
-        ? `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save · ${result.remaining} photos left today`
-        : `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save`
+      mode === "label"
+        ? result.remaining != null
+          ? `Label read — check numbers · ${result.remaining} photos left today`
+          : "Label read — check numbers & save"
+        : result.remaining != null
+          ? `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save · ${result.remaining} photos left today`
+          : `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save`
     );
   } catch (err) {
     console.warn("photo log failed", err);
     const msg =
       err instanceof PhotoLogError || err?.message
         ? err.message
-        : "Couldn’t estimate that photo. Try again or use barcode / voice.";
+        : mode === "label"
+          ? "Couldn’t read that label. Try better light or barcode."
+          : "Couldn’t estimate that photo. Try again or use barcode / voice.";
     toast(msg);
   } finally {
     if (busy) busy.hidden = true;
@@ -1719,6 +1794,7 @@ async function runPhotoMealEstimate(file) {
 // ---- Review drafts (NLP / AI) ----
 function openReview(drafts) {
   reviewDrafts = drafts.map((d) => ({ ...d }));
+  resetPortionFields("review");
   document.getElementById("review-modal").hidden = false;
   renderReviewList();
 }
@@ -1793,6 +1869,7 @@ function setup() {
 
   // Quick log strip
   const el = (id) => document.getElementById(id);
+  wirePortionHints();
   if (el("btn-show-recents")) el("btn-show-recents").onclick = () => renderQuickRail("recents");
   if (el("btn-show-favs")) el("btn-show-favs").onclick = () => renderQuickRail("favs");
   if (el("btn-show-again")) el("btn-show-again").onclick = () => renderQuickRail("again");
@@ -1819,7 +1896,36 @@ function setup() {
       // Re-check in case settings changed or quota hit while camera was open
       const ready = await ensurePhotoLogReady();
       if (!ready) return;
-      await runPhotoMealEstimate(file);
+      await runPhotoMealEstimate(file, "meal");
+    };
+  }
+  const labelInput = el("label-scan-input");
+  if (el("btn-scan-label") && labelInput) {
+    el("btn-scan-label").onclick = async () => {
+      const ready = await ensurePhotoLogReady();
+      if (!ready) return;
+      labelInput.value = "";
+      labelInput.click();
+    };
+    labelInput.onchange = async () => {
+      const file = labelInput.files && labelInput.files[0];
+      labelInput.value = "";
+      if (!file) return;
+      const ready = await ensurePhotoLogReady();
+      if (!ready) return;
+      await runPhotoMealEstimate(file, "label");
+    };
+  }
+  const addLabelInput = el("add-label-input");
+  if (addLabelInput) {
+    addLabelInput.onchange = async () => {
+      const file = addLabelInput.files && addLabelInput.files[0];
+      addLabelInput.value = "";
+      if (!file) return;
+      const ready = await ensurePhotoLogReady();
+      if (!ready) return;
+      closeModal();
+      await runPhotoMealEstimate(file, "label");
     };
   }
   document.getElementById("btn-scan-barcode").onclick = () => {
@@ -1862,7 +1968,8 @@ function setup() {
   };
   async function saveReviewDrafts({ asMeal = false } = {}) {
     const meal = document.getElementById("review-meal").value;
-    const drafts = [...reviewDrafts];
+    const portion = getActivePortion();
+    const drafts = scaleItemList(reviewDrafts, portion.factor);
     if (!drafts.length) return toast("Nothing to save");
     for (const d of drafts) {
       await addDiaryEntry({
@@ -1870,12 +1977,19 @@ function setup() {
         entry_date: currentDate,
         meal: d.meal || meal,
         user_verified: d.confidence >= 0.8,
+        notes:
+          (d.notes || "") +
+          (portion.isFull
+            ? ""
+            : ` [share ${portion.myShare}/${portion.cookedFor}]`),
       });
     }
     if (asMeal) {
-      const defaultName = `Photo meal ${formatDateLabel(currentDate)}`;
+      const defaultName = `Meal ${formatDateLabel(currentDate)}`;
       const name = (prompt("Name this meal for one-tap later:", defaultName) || "").trim();
       if (name) {
+        // Store *full pot* macros so re-logging can re-apply share later if desired;
+        // items already scaled to "my share" for the diary — save same share for one-tap match.
         const items = drafts.map((d) => ({
           food_id: d.food_id || null,
           food_name: d.food_name,
@@ -1904,13 +2018,26 @@ function setup() {
           items,
           totals,
           is_recipe: false,
+          servings_default: 1,
         });
-        toast(`Saved ${drafts.length} items + meal “${name}”`);
+        toast(
+          portion.isFull
+            ? `Saved ${drafts.length} items + meal “${name}”`
+            : `Logged your share (${portion.myShare}/${portion.cookedFor}) + meal “${name}”`
+        );
       } else {
-        toast(`Saved ${drafts.length} items`);
+        toast(
+          portion.isFull
+            ? `Saved ${drafts.length} items`
+            : `Logged your share (${portion.myShare}/${portion.cookedFor})`
+        );
       }
     } else {
-      toast(`Saved ${drafts.length} items`);
+      toast(
+        portion.isFull
+          ? `Saved ${drafts.length} items`
+          : `Logged your share (${portion.myShare}/${portion.cookedFor}) · ${drafts.length} items`
+      );
     }
     reviewDrafts = [];
     document.getElementById("review-modal").hidden = true;
@@ -2088,13 +2215,8 @@ function setup() {
       food = await addFood({ ...pendingOff, is_custom: true });
     }
     if (!food) return;
-    await addDiaryEntry({
-      entry_date: currentDate,
-      meal: modalMeal,
-      food_id: food.id,
-      food_name: food.name,
-      serving_size: food.serving_size,
-      servings,
+    const portion = getActivePortion();
+    const base = {
       calories: food.calories * servings,
       protein: food.protein * servings,
       carbs: food.carbs * servings,
@@ -2102,9 +2224,31 @@ function setup() {
       fiber: (food.fiber || 0) * servings,
       sodium_mg: (food.sodium_mg || 0) * servings,
       sugar_g: (food.sugar_g || 0) * servings,
+      servings,
+    };
+    const scaled = scaleMacros(base, portion.factor);
+    await addDiaryEntry({
+      entry_date: currentDate,
+      meal: modalMeal,
+      food_id: food.id,
+      food_name: food.name,
+      serving_size: food.serving_size,
+      servings: scaled.servings,
+      calories: scaled.calories,
+      protein: scaled.protein,
+      carbs: scaled.carbs,
+      fat: scaled.fat,
+      fiber: scaled.fiber,
+      sodium_mg: scaled.sodium_mg,
+      sugar_g: scaled.sugar_g,
+      notes: portion.isFull ? "" : `share ${portion.myShare}/${portion.cookedFor}`,
     });
     await setServingPref(food.id, food.name, servings);
-    toast(`Added ${food.name}`);
+    toast(
+      portion.isFull
+        ? `Added ${food.name}`
+        : `Added ${food.name} (your share ${portion.myShare}/${portion.cookedFor})`
+    );
     closeModal();
     loadDay();
   };
@@ -2814,11 +2958,13 @@ function renderRestaurantBuilder() {
 async function logRestaurantBuild(saveToo) {
   const b = getRbBuilder();
   const fmt = getRbFormat();
-  const lines = selectionToLines(b, rbState.selected, fmt);
+  let lines = selectionToLines(b, rbState.selected, fmt);
   if (!lines.length) {
     toast("Pick at least one item");
     return;
   }
+  const portion = getActivePortion();
+  lines = scaleItemList(lines, portion.factor);
   const meal = guessMealSlot();
   for (const line of lines) {
     await addDiaryEntry({
@@ -2827,20 +2973,39 @@ async function logRestaurantBuild(saveToo) {
       meal,
       source: "restaurant_builder",
       user_verified: true,
+      notes: portion.isFull ? "" : `share ${portion.myShare}/${portion.cookedFor}`,
     });
   }
   if (saveToo) {
-    const totals = sumSelection(b, rbState.selected, fmt);
+    const totals = lines.reduce(
+      (a, i) => {
+        a.calories += Number(i.calories) || 0;
+        a.protein += Number(i.protein) || 0;
+        a.carbs += Number(i.carbs) || 0;
+        a.fat += Number(i.fat) || 0;
+        a.fiber += Number(i.fiber) || 0;
+        return a;
+      },
+      { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
+    );
     await saveMeal({
-      name: `${b.name} ${fmt.label}`,
+      name: `${b.name} ${fmt.label}${portion.isFull ? "" : ` (share ${portion.myShare}/${portion.cookedFor})`}`,
       is_recipe: false,
       meal_type: meal,
       items: lines,
       totals,
     });
-    toast(`Logged & saved ${lines.length} items`);
+    toast(
+      portion.isFull
+        ? `Logged & saved ${lines.length} items`
+        : `Logged your share (${portion.myShare}/${portion.cookedFor}) & saved`
+    );
   } else {
-    toast(`Logged ${lines.length} items to ${meal}`);
+    toast(
+      portion.isFull
+        ? `Logged ${lines.length} items to ${meal}`
+        : `Logged your share (${portion.myShare}/${portion.cookedFor})`
+    );
   }
   loadDay();
 }
