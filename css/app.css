@@ -2165,6 +2165,59 @@ select:focus {
   font-weight: 600;
   color: var(--text-muted);
 }
+
+/* Week summary + meal save */
+.week-summary .week-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+@media (min-width: 480px) {
+  .week-summary .week-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.week-stat {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.week-stat .wv {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.week-stat .wl {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  line-height: 1.25;
+}
+.save-meal-slot-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0.45rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.save-meal-slot-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.quick-pill.meal-again .qp-name {
+  font-size: 0.78rem;
+}
 /* Safe areas for notched iPhones */
 body {
   padding-top: env(safe-area-inset-top);

@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=30" />
-  <link rel="icon" href="icons/icon-192.png?v=30" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=30" />
+  <link rel="manifest" href="manifest.webmanifest?v=31" />
+  <link rel="icon" href="icons/icon-192.png?v=31" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=31" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=30" />
+  <link rel="stylesheet" href="css/app.css?v=31" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">Streak 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">v30</span>
+      <span id="app-version" class="app-version">v31</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -76,7 +76,7 @@
         <img
           class="brand-mark"
           id="brand-logo"
-          src="icons/logo-mark-light.png?v=30"
+          src="icons/logo-mark-light.png?v=31"
           width="72"
           height="72"
           alt="MacroLedger"
@@ -210,6 +210,8 @@
             <button type="button" class="chip-btn" id="btn-scan-barcode">Barcode</button>
             <button type="button" class="chip-btn" id="btn-voice-log">Voice / text</button>
             <button type="button" class="chip-btn" id="btn-restaurant-build">Restaurant</button>
+            <button type="button" class="chip-btn" id="btn-show-again">Again</button>
+            <button type="button" class="chip-btn" id="btn-show-saved-meals">Meals</button>
             <button type="button" class="chip-btn" id="btn-show-recents">Recents</button>
             <button type="button" class="chip-btn" id="btn-show-favs">Favorites</button>
           </div>
@@ -255,6 +257,12 @@
 
       <section id="view-progress" class="view">
         <h2 class="section-title">Progress</h2>
+        <div class="card">
+          <h3 class="card-title">This week</h3>
+          <div id="week-summary" class="week-summary">
+            <p class="hint" style="margin:0">Loading…</p>
+          </div>
+        </div>
         <div class="card">
           <h3 class="card-title">Last 14 days</h3>
           <div class="history-chart" id="history-chart"></div>
@@ -588,11 +596,11 @@
           </p>
           <div class="logo-preview-row">
             <figure class="logo-preview">
-              <img src="icons/logo-light.jpg?v=30" alt="MacroLedger light logo" />
+              <img src="icons/logo-light.jpg?v=31" alt="MacroLedger light logo" />
               <figcaption>Light</figcaption>
             </figure>
             <figure class="logo-preview">
-              <img src="icons/logo-dark.jpg?v=30" alt="MacroLedger dark logo" />
+              <img src="icons/logo-dark.jpg?v=31" alt="MacroLedger dark logo" />
               <figcaption>Dark</figcaption>
             </figure>
           </div>
@@ -773,8 +781,42 @@
         <div id="review-list" class="review-list"></div>
         <div class="modal-footer" style="margin-top:1rem">
           <button type="button" class="ghost-btn" id="review-discard">Discard</button>
+          <button type="button" class="ghost-btn" id="review-save-meal">Save all + meal</button>
           <button type="button" class="primary-btn" id="review-save">Save all ✓</button>
         </div>
+        <p class="hint" style="margin:0.5rem 0 0">
+          <strong>Save all + meal</strong> logs the food and stores a named meal for Quick log → Meals.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit diary entry -->
+  <div class="modal-backdrop" id="edit-entry-modal" hidden>
+    <div class="modal modal-sm" role="dialog" aria-labelledby="edit-entry-title">
+      <div class="modal-header">
+        <h2 id="edit-entry-title">Edit entry</h2>
+        <button type="button" class="icon-btn" id="close-edit-entry" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-entry-form" class="form-grid">
+          <input type="hidden" id="edit-entry-id" />
+          <label class="span-2">Name<input id="edit-entry-name" required /></label>
+          <label>Serving size<input id="edit-entry-serving-size" placeholder="4 oz" /></label>
+          <label>Servings<input id="edit-entry-servings" type="number" min="0.1" step="0.25" required /></label>
+          <label>Calories<input id="edit-entry-calories" type="number" step="1" required /></label>
+          <label>Protein (g)<input id="edit-entry-protein" type="number" step="0.1" /></label>
+          <label>Carbs (g)<input id="edit-entry-carbs" type="number" step="0.1" /></label>
+          <label>Fat (g)<input id="edit-entry-fat" type="number" step="0.1" /></label>
+          <label>Fiber (g)<input id="edit-entry-fiber" type="number" step="0.1" /></label>
+          <p class="hint span-2" style="margin:0">
+            Change servings and macros freely. Your last servings amount is remembered for this food next time.
+          </p>
+          <div class="span-2 form-actions">
+            <button type="button" class="ghost-btn" id="edit-entry-cancel">Cancel</button>
+            <button type="submit" class="primary-btn">Save changes</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -813,6 +855,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=30"></script>
+  <script type="module" src="js/app.js?v=31"></script>
 </body>
 </html>

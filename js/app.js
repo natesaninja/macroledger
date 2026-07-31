@@ -16,8 +16,14 @@ import {
   diaryForDate,
   addDiaryEntry,
   updateDiaryServings,
+  updateDiaryEntry,
   deleteDiary,
   copyDiary,
+  getServingPref,
+  setServingPref,
+  listRecentMealBundles,
+  logMealBundle,
+  weekNutritionSummary,
   exerciseForDate,
   addExercise,
   deleteExercise,
@@ -151,8 +157,8 @@ function updateBrandLogo(themeId) {
   if (!img) return;
   const light = themeId === "light" || themeId === "ocean";
   const src = light
-    ? "icons/logo-mark-light.png?v=30"
-    : "icons/logo-mark-dark.png?v=30";
+    ? "icons/logo-mark-light.png?v=31"
+    : "icons/logo-mark-dark.png?v=31";
   if (img.getAttribute("src") !== src) img.setAttribute("src", src);
   img.alt = light ? "MacroLedger" : "MacroLedger (dark)";
 }
@@ -455,43 +461,102 @@ async function refreshStreak() {
 
 async function renderQuickRail(mode) {
   const rail = document.getElementById("quick-rail");
+  if (!rail) return;
+
+  // Full meals to log again
+  if (mode === "again") {
+    const bundles = await listRecentMealBundles(12, 14);
+    if (!bundles.length) {
+      rail.innerHTML = `<div class="empty-state" style="padding:0.25rem 0">No past meals yet — log food, then use Again to re-log whole meals.</div>`;
+      return;
+    }
+    rail.innerHTML = bundles
+      .map(
+        (b, i) => `<button type="button" class="quick-pill meal-again" data-i="${i}">
+      <div class="qp-name">${escapeHtml(b.label)}</div>
+      <div class="qp-cal">${escapeHtml(b.subtitle)} · ${formatNum(b.calories)} cal · ${b.count} item${b.count === 1 ? "" : "s"}</div>
+    </button>`
+      )
+      .join("");
+    rail.querySelectorAll(".meal-again").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const b = bundles[Number(btn.dataset.i)];
+        if (!b) return;
+        try {
+          const n = await logMealBundle(b, currentDate, b.meal);
+          toast(`Logged ${n} items · ${b.label}`);
+          loadDay();
+        } catch (e) {
+          toast(e.message || "Could not log meal");
+        }
+      });
+    });
+    return;
+  }
+
+  // Saved meal templates
+  if (mode === "meals") {
+    const meals = await listSavedMeals();
+    if (!meals.length) {
+      rail.innerHTML = `<div class="empty-state" style="padding:0.25rem 0">No saved meals yet — save from photo review or restaurant builder.</div>`;
+      return;
+    }
+    rail.innerHTML = meals
+      .slice(0, 12)
+      .map(
+        (m) => `<button type="button" class="quick-pill" data-meal-id="${m.id}">
+      <div class="qp-name">${escapeHtml(m.name)}</div>
+      <div class="qp-cal">${formatNum(m.totals?.calories || 0)} cal · ${(m.items || []).length} items · tap</div>
+    </button>`
+      )
+      .join("");
+    rail.querySelectorAll("[data-meal-id]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const n = await logSavedMeal(Number(btn.dataset.mealId), currentDate, guessMealSlot(), 1);
+        toast(`Logged ${n} items`);
+        loadDay();
+      });
+    });
+    return;
+  }
+
   const foods = mode === "favs" ? await listFavorites() : await listRecents(12);
   if (!foods.length) {
-    rail.innerHTML = `<div class="empty-state" style="padding:0.25rem 0">No ${mode === "favs" ? "favorites" : "recents"} yet � log foods to build this list.</div>`;
+    rail.innerHTML = `<div class="empty-state" style="padding:0.25rem 0">No ${mode === "favs" ? "favorites" : "recents"} yet — log foods to build this list.</div>`;
     return;
   }
   rail.innerHTML = foods
     .map(
       (f) => `<button type="button" class="quick-pill" data-id="${f.id}">
       <div class="qp-name">${escapeHtml(f.name)}</div>
-      <div class="qp-cal">${formatNum(f.calories)} cal${settings?.points_enabled !== "0" ? ` · ${formatPoints(foodPoints(f, pointsOpts()))} pts` : ""} � tap to add</div>
+      <div class="qp-cal">${formatNum(f.calories)} cal${settings?.points_enabled !== "0" ? ` · ${formatPoints(foodPoints(f, pointsOpts()))} pts` : ""} · tap to add</div>
     </button>`
     )
     .join("");
-  rail.querySelectorAll(".quick-pill").forEach((btn) => {
+  rail.querySelectorAll(".quick-pill[data-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = Number(btn.dataset.id);
-      const list = foods;
-      const food = list.find((x) => x.id === id);
+      const food = foods.find((x) => x.id === id);
       if (!food) return;
+      const pref = (await getServingPref(food.id, food.name)) || 1;
       await addDiaryEntry({
         entry_date: currentDate,
         meal: guessMealSlot(),
         food_id: food.id,
         food_name: food.name,
         serving_size: food.serving_size,
-        servings: 1,
-        calories: food.calories,
-        protein: food.protein,
-        carbs: food.carbs,
-        fat: food.fat,
-        fiber: food.fiber || 0,
-        sodium_mg: food.sodium_mg || 0,
-        sugar_g: food.sugar_g || 0,
+        servings: pref,
+        calories: food.calories * pref,
+        protein: food.protein * pref,
+        carbs: food.carbs * pref,
+        fat: food.fat * pref,
+        fiber: (food.fiber || 0) * pref,
+        sodium_mg: (food.sodium_mg || 0) * pref,
+        sugar_g: (food.sugar_g || 0) * pref,
         source: "quick",
         user_verified: true,
       });
-      toast(`Added ${food.name}`);
+      toast(pref !== 1 ? `Added ${food.name} × ${pref}` : `Added ${food.name}`);
       loadDay();
     });
   });
@@ -614,9 +679,14 @@ function renderMeals(d) {
             : ""
         }</span>
         <div class="meal-actions">
-          <button type="button" class="copy-meal-btn" data-meal="${m.id}" title="Copy from yesterday" ${
+          <button type="button" class="copy-meal-btn" data-meal="${m.id}" title="Copy this meal from yesterday" ${
             prev[m.id] ? "" : "disabled"
-          }>Copy</button>
+          }>Copy yest.</button>
+          ${
+            entries.length
+              ? `<button type="button" class="save-meal-slot-btn" data-meal="${m.id}" title="Save this meal for one-tap later">Save</button>`
+              : ""
+          }
           <button type="button" class="add-meal-btn" data-meal="${m.id}" title="Add food">+</button>
         </div>
       </div>
@@ -632,11 +702,51 @@ function renderMeals(d) {
     b.addEventListener("click", async () => {
       try {
         const n = await copyDiary(d.prev_day, currentDate, b.dataset.meal);
-        toast(`Copied ${n}`);
+        toast(`Copied ${n} from yesterday`);
         loadDay();
       } catch (e) {
         toast(e.message);
       }
+    })
+  );
+  root.querySelectorAll(".save-meal-slot-btn").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const mealId = b.dataset.meal;
+      const items = (d.meals[mealId] || []).map((e) => ({
+        food_id: e.food_id,
+        food_name: e.food_name,
+        serving_size: e.serving_size,
+        servings: e.servings,
+        calories: e.calories,
+        protein: e.protein,
+        carbs: e.carbs,
+        fat: e.fat,
+        fiber: e.fiber || 0,
+      }));
+      if (!items.length) return toast("Nothing to save");
+      const label = MEALS.find((x) => x.id === mealId)?.label || mealId;
+      const name =
+        prompt("Name this meal:", `${label} ${formatDateLabel(currentDate)}`) || "";
+      if (!name.trim()) return;
+      const totals = items.reduce(
+        (a, i) => {
+          a.calories += Number(i.calories) || 0;
+          a.protein += Number(i.protein) || 0;
+          a.carbs += Number(i.carbs) || 0;
+          a.fat += Number(i.fat) || 0;
+          a.fiber += Number(i.fiber) || 0;
+          return a;
+        },
+        { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
+      );
+      await saveMeal({
+        name: name.trim(),
+        meal_type: mealId,
+        items,
+        totals,
+        is_recipe: false,
+      });
+      toast("Meal saved — use Quick log → Meals");
     })
   );
   root.querySelectorAll(".del").forEach((b) =>
@@ -647,13 +757,15 @@ function renderMeals(d) {
     })
   );
   root.querySelectorAll(".edit-serv").forEach((b) =>
-    b.addEventListener("click", async () => {
-      const next = prompt("Servings:", b.dataset.s);
-      if (!next) return;
-      const s = parseFloat(next);
-      if (!(s > 0)) return toast("Invalid");
-      await updateDiaryServings(Number(b.dataset.id), s);
-      loadDay();
+    b.addEventListener("click", () => {
+      const id = Number(b.dataset.id);
+      let found = null;
+      for (const m of MEALS) {
+        found = (d.meals[m.id] || []).find((e) => e.id === id);
+        if (found) break;
+      }
+      if (found) openEditEntry(found);
+      else toast("Could not open entry");
     })
   );
   root.querySelectorAll(".verify").forEach((b) =>
@@ -818,15 +930,23 @@ async function doSearch(q) {
   bindLocalSearchClicks(box, local);
 }
 
+async function applyDefaultServings(foodId, foodName) {
+  const inp = document.getElementById("servings-input");
+  if (!inp) return;
+  const pref = await getServingPref(foodId, foodName);
+  inp.value = pref && pref > 0 ? pref : 1;
+}
+
 function bindLocalSearchClicks(box, foods) {
   box.querySelectorAll(".result-item[data-local-id]").forEach((el) => {
-    el.addEventListener("click", () => {
+    el.addEventListener("click", async () => {
       selectedFood = foods.find((f) => f.id === Number(el.dataset.localId));
       pendingOff = null;
       box.querySelectorAll(".result-item").forEach((x) => x.classList.remove("selected"));
       el.classList.add("selected");
       document.getElementById("servings-row").hidden = false;
       document.getElementById("add-selected").disabled = false;
+      if (selectedFood) await applyDefaultServings(selectedFood.id, selectedFood.name);
       updatePreview();
     });
   });
@@ -834,7 +954,7 @@ function bindLocalSearchClicks(box, foods) {
 
 function bindOnlineSearchClicks(box) {
   box.querySelectorAll(".result-item[data-online-i]").forEach((el) => {
-    el.addEventListener("click", () => {
+    el.addEventListener("click", async () => {
       const i = Number(el.dataset.onlineI);
       const food = onlineHits[i];
       if (!food) return;
@@ -844,6 +964,7 @@ function bindOnlineSearchClicks(box) {
       el.classList.add("selected");
       document.getElementById("servings-row").hidden = false;
       document.getElementById("add-selected").disabled = false;
+      await applyDefaultServings(null, food.name);
       updatePreview();
     });
   });
@@ -1070,6 +1191,37 @@ async function loadProgress() {
       </div>`;
     })
     .join("");
+
+  // Weekly summary (last 7 days)
+  const weekEl = document.getElementById("week-summary");
+  if (weekEl) {
+    try {
+      const w = await weekNutritionSummary(todayISO(), goals);
+      if (!w.daysLogged) {
+        weekEl.innerHTML = `<p class="hint" style="margin:0">Log meals this week to see averages and protein days hit.</p>`;
+      } else {
+        weekEl.innerHTML = `
+          <div class="week-grid">
+            <div class="week-stat"><span class="wv">${w.daysLogged}/7</span><span class="wl">days logged</span></div>
+            <div class="week-stat"><span class="wv">${formatNum(w.avgCalories)}</span><span class="wl">avg cal</span></div>
+            <div class="week-stat"><span class="wv">${formatNum(w.avgProtein, 0)}g</span><span class="wl">avg protein</span></div>
+            <div class="week-stat"><span class="wv">${w.proteinDaysHit}/${w.daysLogged}</span><span class="wl">protein days (~90%+ goal)</span></div>
+            <div class="week-stat"><span class="wv">${w.calOnTrackDays}/${w.daysLogged}</span><span class="wl">cal on-track days</span></div>
+          </div>
+          <p class="hint" style="margin:0.65rem 0 0">
+            Goal ${formatNum(w.calGoal)} cal · ${formatNum(w.proGoal)}g protein.
+            ${
+              w.proteinDaysHit >= Math.ceil(w.daysLogged * 0.7)
+                ? "Protein looks solid this week."
+                : "Tip: prioritize protein on the next few days."
+            }
+          </p>`;
+      }
+    } catch (err) {
+      console.warn("week summary failed", err);
+      weekEl.innerHTML = `<p class="hint" style="margin:0">Could not load week summary.</p>`;
+    }
+  }
 
   const weights = await listWeight(60);
   const list = document.getElementById("weight-list");
@@ -1482,6 +1634,28 @@ function setupOnboarding() {
   };
 }
 
+// ---- Edit diary entry (servings + macros) ----
+function openEditEntry(entry) {
+  if (!entry?.id) return;
+  const modal = document.getElementById("edit-entry-modal");
+  if (!modal) return;
+  document.getElementById("edit-entry-id").value = entry.id;
+  document.getElementById("edit-entry-name").value = entry.food_name || "";
+  document.getElementById("edit-entry-serving-size").value = entry.serving_size || "";
+  document.getElementById("edit-entry-servings").value = entry.servings ?? 1;
+  document.getElementById("edit-entry-calories").value = Math.round(entry.calories || 0);
+  document.getElementById("edit-entry-protein").value = Number(entry.protein || 0).toFixed(1);
+  document.getElementById("edit-entry-carbs").value = Number(entry.carbs || 0).toFixed(1);
+  document.getElementById("edit-entry-fat").value = Number(entry.fat || 0).toFixed(1);
+  document.getElementById("edit-entry-fiber").value = Number(entry.fiber || 0).toFixed(1);
+  modal.hidden = false;
+}
+
+function closeEditEntry() {
+  const modal = document.getElementById("edit-entry-modal");
+  if (modal) modal.hidden = true;
+}
+
 // ---- Photo meal estimate ----
 let photoBusy = false;
 
@@ -1621,6 +1795,8 @@ function setup() {
   const el = (id) => document.getElementById(id);
   if (el("btn-show-recents")) el("btn-show-recents").onclick = () => renderQuickRail("recents");
   if (el("btn-show-favs")) el("btn-show-favs").onclick = () => renderQuickRail("favs");
+  if (el("btn-show-again")) el("btn-show-again").onclick = () => renderQuickRail("again");
+  if (el("btn-show-saved-meals")) el("btn-show-saved-meals").onclick = () => renderQuickRail("meals");
   if (el("btn-voice-log")) {
     el("btn-voice-log").onclick = () => {
       if (el("nlp-modal")) el("nlp-modal").hidden = false;
@@ -1684,9 +1860,11 @@ function setup() {
     document.getElementById("review-modal").hidden = true;
     reviewDrafts = [];
   };
-  document.getElementById("review-save").onclick = async () => {
+  async function saveReviewDrafts({ asMeal = false } = {}) {
     const meal = document.getElementById("review-meal").value;
-    for (const d of reviewDrafts) {
+    const drafts = [...reviewDrafts];
+    if (!drafts.length) return toast("Nothing to save");
+    for (const d of drafts) {
       await addDiaryEntry({
         ...d,
         entry_date: currentDate,
@@ -1694,11 +1872,84 @@ function setup() {
         user_verified: d.confidence >= 0.8,
       });
     }
-    toast(`Saved ${reviewDrafts.length} items`);
+    if (asMeal) {
+      const defaultName = `Photo meal ${formatDateLabel(currentDate)}`;
+      const name = (prompt("Name this meal for one-tap later:", defaultName) || "").trim();
+      if (name) {
+        const items = drafts.map((d) => ({
+          food_id: d.food_id || null,
+          food_name: d.food_name,
+          serving_size: d.serving_size,
+          servings: d.servings || 1,
+          calories: d.calories,
+          protein: d.protein,
+          carbs: d.carbs,
+          fat: d.fat,
+          fiber: d.fiber || 0,
+        }));
+        const totals = items.reduce(
+          (a, i) => {
+            a.calories += Number(i.calories) || 0;
+            a.protein += Number(i.protein) || 0;
+            a.carbs += Number(i.carbs) || 0;
+            a.fat += Number(i.fat) || 0;
+            a.fiber += Number(i.fiber) || 0;
+            return a;
+          },
+          { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
+        );
+        await saveMeal({
+          name,
+          meal_type: meal,
+          items,
+          totals,
+          is_recipe: false,
+        });
+        toast(`Saved ${drafts.length} items + meal “${name}”`);
+      } else {
+        toast(`Saved ${drafts.length} items`);
+      }
+    } else {
+      toast(`Saved ${drafts.length} items`);
+    }
     reviewDrafts = [];
     document.getElementById("review-modal").hidden = true;
     loadDay();
-  };
+  }
+  document.getElementById("review-save").onclick = () => saveReviewDrafts({ asMeal: false });
+  const reviewSaveMeal = document.getElementById("review-save-meal");
+  if (reviewSaveMeal) reviewSaveMeal.onclick = () => saveReviewDrafts({ asMeal: true });
+
+  // Edit entry modal
+  const editModal = document.getElementById("edit-entry-modal");
+  if (editModal) {
+    document.getElementById("close-edit-entry").onclick = closeEditEntry;
+    document.getElementById("edit-entry-cancel").onclick = closeEditEntry;
+    editModal.addEventListener("click", (e) => {
+      if (e.target.id === "edit-entry-modal") closeEditEntry();
+    });
+    document.getElementById("edit-entry-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const id = Number(document.getElementById("edit-entry-id").value);
+      try {
+        await updateDiaryEntry(id, {
+          food_name: document.getElementById("edit-entry-name").value,
+          serving_size: document.getElementById("edit-entry-serving-size").value,
+          servings: parseFloat(document.getElementById("edit-entry-servings").value),
+          calories: parseFloat(document.getElementById("edit-entry-calories").value),
+          protein: parseFloat(document.getElementById("edit-entry-protein").value),
+          carbs: parseFloat(document.getElementById("edit-entry-carbs").value),
+          fat: parseFloat(document.getElementById("edit-entry-fat").value),
+          fiber: parseFloat(document.getElementById("edit-entry-fiber").value),
+        });
+        closeEditEntry();
+        toast("Entry updated");
+        loadDay();
+      } catch (err) {
+        toast(err.message || "Update failed");
+      }
+    };
+  }
 
   // Recipe builder
   let recipeSearchT;
@@ -1852,6 +2103,7 @@ function setup() {
       sodium_mg: (food.sodium_mg || 0) * servings,
       sugar_g: (food.sugar_g || 0) * servings,
     });
+    await setServingPref(food.id, food.name, servings);
     toast(`Added ${food.name}`);
     closeModal();
     loadDay();

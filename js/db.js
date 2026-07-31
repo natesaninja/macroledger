@@ -479,6 +479,7 @@ export async function addDiaryEntry(entry) {
   };
   const id = await dbAdd("diary", row);
   if (row.food_id) await touchRecent(row.food_id);
+  await setServingPref(row.food_id, row.food_name, row.servings);
   await bumpStreak(row.entry_date);
   try {
     const { scheduleFullBackup } = await import("./persist.js");
@@ -498,7 +499,85 @@ export async function updateDiaryServings(id, servings) {
     row[k] = Math.round(((row[k] || 0) / old) * servings * 100) / 100;
   }
   await dbPut("diary", row);
+  if (row.food_id || row.food_name) {
+    await setServingPref(row.food_id, row.food_name, row.servings);
+  }
   return row;
+}
+
+/** Full edit of a diary line (servings and/or absolute macros + name). */
+export async function updateDiaryEntry(id, patch = {}) {
+  const row = await dbGet("diary", id);
+  if (!row) throw new Error("Entry not found");
+  if (patch.food_name != null) row.food_name = String(patch.food_name).trim() || row.food_name;
+  if (patch.serving_size != null) row.serving_size = String(patch.serving_size).trim() || row.serving_size;
+  if (patch.notes != null) row.notes = String(patch.notes);
+
+  const hasAbsMacros =
+    patch.calories != null ||
+    patch.protein != null ||
+    patch.carbs != null ||
+    patch.fat != null;
+
+  if (patch.servings != null && Number(patch.servings) > 0 && !hasAbsMacros) {
+    const old = row.servings || 1;
+    const s = Number(patch.servings);
+    row.servings = s;
+    for (const k of ["calories", "protein", "carbs", "fat", "fiber", "sodium_mg", "sugar_g"]) {
+      row[k] = Math.round(((row[k] || 0) / old) * s * 100) / 100;
+    }
+  } else {
+    if (patch.servings != null && Number(patch.servings) > 0) row.servings = Number(patch.servings);
+    for (const k of ["calories", "protein", "carbs", "fat", "fiber", "sodium_mg", "sugar_g"]) {
+      if (patch[k] != null && patch[k] !== "") row[k] = Math.round(Number(patch[k]) * 100) / 100;
+    }
+  }
+  row.user_verified = true;
+  row.confidence = 1;
+  await dbPut("diary", row);
+  if (row.food_id || row.food_name) {
+    await setServingPref(row.food_id, row.food_name, row.servings);
+  }
+  try {
+    const { scheduleFullBackup } = await import("./persist.js");
+    scheduleFullBackup(exportAllJson);
+  } catch {
+    /* ok */
+  }
+  return row;
+}
+
+function serveKey(foodId, foodName) {
+  if (foodId != null && foodId !== "") return `serve_id_${foodId}`;
+  const n = String(foodName || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return n ? `serve_n_${n}` : null;
+}
+
+export async function getServingPref(foodId, foodName) {
+  const k1 = foodId != null ? serveKey(foodId, null) : null;
+  if (k1) {
+    const m = await dbGet("meta", k1);
+    if (m && parseFloat(m.value) > 0) return parseFloat(m.value);
+  }
+  const k2 = serveKey(null, foodName);
+  if (k2) {
+    const m = await dbGet("meta", k2);
+    if (m && parseFloat(m.value) > 0) return parseFloat(m.value);
+  }
+  return null;
+}
+
+export async function setServingPref(foodId, foodName, servings) {
+  const s = Number(servings);
+  if (!(s > 0)) return;
+  const k1 = foodId != null ? serveKey(foodId, null) : null;
+  if (k1) await dbPut("meta", { key: k1, value: String(s) });
+  const k2 = serveKey(null, foodName);
+  if (k2) await dbPut("meta", { key: k2, value: String(s) });
 }
 
 export async function verifyDiaryEntry(id) {
@@ -574,6 +653,135 @@ export async function logSavedMeal(mealId, date, mealSlot, servingsMult = 1) {
     n++;
   }
   return n;
+}
+
+/**
+ * Recent full meals from diary (for "Log again").
+ * Returns newest-first bundles: { key, date, meal, label, count, calories, protein, items[] }
+ */
+export async function listRecentMealBundles(limit = 12, daysBack = 14) {
+  const mealLabels = {
+    breakfast: "Breakfast",
+    lunch: "Lunch",
+    dinner: "Dinner",
+    snacks: "Snacks",
+  };
+  const today = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const shift = (iso, n) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + n);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  };
+
+  const bundles = [];
+  for (let i = 0; i < daysBack; i++) {
+    const date = shift(today, -i);
+    const rows = await diaryForDate(date);
+    const byMeal = {};
+    for (const r of rows) {
+      if (!byMeal[r.meal]) byMeal[r.meal] = [];
+      byMeal[r.meal].push(r);
+    }
+    for (const meal of ["breakfast", "lunch", "dinner", "snacks"]) {
+      const items = byMeal[meal];
+      if (!items?.length) continue;
+      const calories = items.reduce((s, e) => s + (Number(e.calories) || 0), 0);
+      const protein = items.reduce((s, e) => s + (Number(e.protein) || 0), 0);
+      const names = items.map((e) => e.food_name).filter(Boolean);
+      const short =
+        names.length <= 2
+          ? names.join(" · ")
+          : `${names.slice(0, 2).join(" · ")} +${names.length - 2}`;
+      bundles.push({
+        key: `${date}|${meal}`,
+        date,
+        meal,
+        label: `${mealLabels[meal] || meal}${i === 0 ? " (today)" : i === 1 ? " (yest.)" : ""}`,
+        subtitle: short,
+        count: items.length,
+        calories,
+        protein,
+        items: items.map((e) => {
+          const { id, entry_date, ...rest } = e;
+          return rest;
+        }),
+      });
+    }
+  }
+  return bundles.slice(0, limit);
+}
+
+/** Log a meal bundle (from listRecentMealBundles) onto a target date/slot. */
+export async function logMealBundle(bundle, toDate, mealSlot = null) {
+  if (!bundle?.items?.length) throw new Error("Nothing to log");
+  let n = 0;
+  const slot = mealSlot || bundle.meal || "lunch";
+  for (const item of bundle.items) {
+    await addDiaryEntry({
+      ...item,
+      entry_date: toDate,
+      meal: slot,
+      source: "log_again",
+      user_verified: true,
+    });
+    n++;
+  }
+  return n;
+}
+
+/**
+ * Week summary ending on endDate (inclusive), last 7 days.
+ */
+export async function weekNutritionSummary(endDate, goals = {}) {
+  const shift = (iso, n) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + n);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  };
+  const calGoal = Number(goals.calories) || 2000;
+  const proGoal = Number(goals.protein) || 150;
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = shift(endDate, -i);
+    const entries = await diaryForDate(date);
+    const ex = await exerciseForDate(date);
+    const calories = entries.reduce((s, e) => s + (Number(e.calories) || 0), 0);
+    const protein = entries.reduce((s, e) => s + (Number(e.protein) || 0), 0);
+    const carbs = entries.reduce((s, e) => s + (Number(e.carbs) || 0), 0);
+    const fat = entries.reduce((s, e) => s + (Number(e.fat) || 0), 0);
+    const burned = ex.reduce((s, e) => s + (Number(e.calories) || 0), 0);
+    const logged = entries.length > 0;
+    days.push({
+      date,
+      calories,
+      protein,
+      carbs,
+      fat,
+      burned,
+      logged,
+      proteinHit: logged && protein >= proGoal * 0.9,
+      calOnTrack: logged && calories - burned <= calGoal * 1.05,
+    });
+  }
+  const loggedDays = days.filter((d) => d.logged);
+  const n = loggedDays.length || 1;
+  const sum = (k) => loggedDays.reduce((s, d) => s + d[k], 0);
+  return {
+    days,
+    daysLogged: loggedDays.length,
+    daysInWeek: 7,
+    avgCalories: Math.round(sum("calories") / n),
+    avgProtein: Math.round((sum("protein") / n) * 10) / 10,
+    proteinDaysHit: loggedDays.filter((d) => d.proteinHit).length,
+    calOnTrackDays: loggedDays.filter((d) => d.calOnTrack).length,
+    calGoal,
+    proGoal,
+  };
 }
 
 // ---- Exercise ----
