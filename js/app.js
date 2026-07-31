@@ -4,6 +4,7 @@
 import {
   ensureSeeded,
   ensureRestaurantFoods,
+  ensureExtraSeedFoods,
   migrateLegacyDatabases,
   getSettings,
   setSettings,
@@ -149,8 +150,8 @@ function updateBrandLogo(themeId) {
   if (!img) return;
   const light = themeId === "light" || themeId === "ocean";
   const src = light
-    ? "icons/logo-mark-light.png?v=26"
-    : "icons/logo-mark-dark.png?v=26";
+    ? "icons/logo-mark-light.png?v=29"
+    : "icons/logo-mark-dark.png?v=29";
   if (img.getAttribute("src") !== src) img.setAttribute("src", src);
   img.alt = light ? "MacroLedger" : "MacroLedger (dark)";
 }
@@ -2699,6 +2700,15 @@ async function boot() {
     const addedRestaurants = await ensureRestaurantFoods(RESTAURANT_FOODS, "eastcoast_v2");
     if (addedRestaurants > 0) {
       console.log(`Added ${addedRestaurants} restaurant foods`);
+    }
+    // New common foods for phones that already seeded (bump version when adding more)
+    const EXTRA_SEED = SEED_FOODS.filter((f) =>
+      /london broil|top round|sirloin steak|flank steak/i.test(f[0] || "")
+    );
+    const addedExtra = await ensureExtraSeedFoods(EXTRA_SEED, "lean_beef_v1");
+    if (addedExtra > 0) {
+      console.log(`Added ${addedExtra} extra seed foods`);
+      toast(`Added ${addedExtra} new foods (incl. London broil)`);
     }
   } catch (err) {
     console.warn("seed failed", err);

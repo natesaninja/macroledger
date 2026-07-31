@@ -37,6 +37,12 @@ const ALIASES = {
   avocado: "avocado",
   protein: "protein powder",
   shake: "protein powder",
+  "london broil": "london broil",
+  "london broil beef": "london broil",
+  "beef london broil": "london broil",
+  "top round": "beef top round",
+  "flank steak": "flank steak",
+  sirloin: "sirloin steak",
 };
 
 function normalizePhrase(s) {

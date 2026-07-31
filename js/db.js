@@ -759,6 +759,35 @@ export async function ensureRestaurantFoods(restaurantFoods, version = "eastcoas
   return added;
 }
 
+/**
+ * Add extra common foods for phones that already ran the first seed.
+ * Bump `version` when you ship new SEED_FOODS rows existing users need.
+ */
+export async function ensureExtraSeedFoods(seedFoods, version = "seed_extra_v1") {
+  const key = `seed_extra_${version}`;
+  const meta = await dbGet("meta", key);
+  if (meta && meta.value) return 0;
+  if (!seedFoods?.length) {
+    await dbPut("meta", { key, value: true });
+    return 0;
+  }
+
+  const existing = await listFoods();
+  const have = new Set(
+    existing.map((f) => `${(f.brand || "").toLowerCase()}|${(f.name || "").toLowerCase()}`)
+  );
+  let added = 0;
+  for (const f of seedFoods) {
+    const k = `${(f[1] || "").toLowerCase()}|${(f[0] || "").toLowerCase()}`;
+    if (have.has(k)) continue;
+    await dbAdd("foods", foodRowFromTuple(f, "seed"));
+    have.add(k);
+    added++;
+  }
+  await dbPut("meta", { key, value: true });
+  return added;
+}
+
 export async function exportAllJson() {
   return {
     version: 2,
