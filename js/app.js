@@ -3265,6 +3265,108 @@ async function boot() {
     console.error("loadDay failed", err);
     toast("Couldn’t load your diary — try Restore from file on Progress, or reopen online");
   }
+
+  // Iron Ledger deep-link: ?iron=1&date=&min=&name=&auto=1
+  try {
+    await consumeIronLedgerHandoff();
+  } catch (err) {
+    console.warn("Iron Ledger handoff failed", err);
+  }
+}
+
+/**
+ * Accept session handoff from Iron Ledger (strength app).
+ * Example:
+ *   .../macroledger/?iron=1&date=2026-08-03&min=52&name=Iron+Ledger+·+Full+Body&auto=1
+ */
+async function consumeIronLedgerHandoff() {
+  const params = new URLSearchParams(window.location.search || "");
+  const fromIron =
+    params.get("iron") === "1" ||
+    params.get("from") === "iron-ledger" ||
+    params.get("from") === "ironledger";
+  if (!fromIron) return;
+
+  const date = (params.get("date") || todayISO()).slice(0, 10);
+  const min = Math.max(0, parseFloat(params.get("min") || params.get("minutes") || "0") || 0);
+  let name = params.get("name") || "Iron Ledger · Strength";
+  try {
+    name = decodeURIComponent(name.replace(/\+/g, " "));
+  } catch {
+    /* keep raw */
+  }
+  const auto = params.get("auto") === "1" || params.get("auto") === "true";
+
+  // Clean query so refresh doesn’t double-log
+  try {
+    const clean = window.location.pathname + (window.location.hash || "");
+    window.history.replaceState({}, "", clean);
+  } catch {
+    /* ok */
+  }
+
+  // Jump diary to that day
+  currentDate = date;
+  try {
+    await loadDay();
+  } catch {
+    /* loadDay may already have run */
+  }
+
+  if (auto && min > 0) {
+    // Avoid duplicate if same handoff already logged today (same name + duration)
+    const existing = await exerciseForDate(date);
+    const dup = existing.some(
+      (e) =>
+        (e.source === "iron_ledger" || (e.name || "").startsWith("Iron Ledger")) &&
+        Number(e.duration_min) === min
+    );
+    if (dup) {
+      toast("Iron Ledger session already logged today");
+      return;
+    }
+
+    settings = await getSettings();
+    const w = await resolveWeightLb(settings);
+    const est = estimateExerciseCalories("Weightlifting", min, w || 180);
+    const calories = est?.calories != null ? est.calories : Math.round(min * 5.5);
+
+    await addExercise({
+      entry_date: date,
+      name,
+      duration_min: min,
+      calories,
+      note: "Imported from Iron Ledger",
+      source: "iron_ledger",
+    });
+    toast(`Iron Ledger · ${min} min · ~${calories} cal`);
+    await loadDay();
+    return;
+  }
+
+  // Prefill exercise modal for manual confirm
+  const modal = document.getElementById("exercise-modal");
+  const nameEl = document.getElementById("ex-name");
+  const durEl = document.getElementById("ex-duration");
+  if (nameEl) nameEl.value = name;
+  if (durEl) durEl.value = String(min || 45);
+  if (modal) modal.hidden = false;
+  try {
+    const est = await (async () => {
+      settings = await getSettings();
+      const w = await resolveWeightLb(settings);
+      return estimateExerciseCalories(nameEl?.value || "Weightlifting", parseFloat(durEl?.value) || 0, w);
+    })();
+    if (est?.calories != null) {
+      const calEl = document.getElementById("ex-calories");
+      if (calEl) calEl.value = est.calories;
+      const line = document.getElementById("ex-estimate-line");
+      if (line) line.innerHTML = `From Iron Ledger · estimate <strong>${est.calories} cal</strong>`;
+    }
+  } catch {
+    /* ok */
+  }
+  toast("Iron Ledger session ready — review & Add");
 }
 
 boot().catch((err) => {
