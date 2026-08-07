@@ -435,7 +435,17 @@ function renderDay(d) {
   refreshStreak();
 
   const prevTotal = Object.values(d.prev_meal_counts).reduce((a, b) => a + b, 0);
-  document.getElementById("copy-yesterday-btn").disabled = prevTotal === 0;
+  const copyBtn = document.getElementById("copy-yesterday-btn");
+  if (copyBtn) copyBtn.disabled = prevTotal === 0;
+  updateIronBridgeLink();
+}
+
+/** Keep Open Iron deep-link pointed at today's diary date (Iron may ignore ?day=). */
+function updateIronBridgeLink() {
+  const a = document.getElementById("btn-open-iron");
+  if (!a) return;
+  const day = currentDate || todayISO();
+  a.href = `https://natesaninja.github.io/iron-ledger/?from=macroledger&day=${encodeURIComponent(day)}`;
 }
 
 function renderDensity(d) {
@@ -802,19 +812,29 @@ function renderExercise(d) {
     return;
   }
   root.innerHTML = list
-    .map(
-      (e) => `
-    <div class="entry">
+    .map((e) => {
+      const fromIron = e.source === "iron_ledger" || String(e.name || "").startsWith("Iron Ledger");
+      const meta = [
+        e.duration_min ? `${formatNum(e.duration_min)} min` : "",
+        fromIron ? "Iron Ledger" : "",
+        e.note && fromIron ? "" : e.note ? String(e.note).slice(0, 48) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return `
+    <div class="entry${fromIron ? " entry-iron" : ""}">
       <div>
-        <div class="entry-name">${escapeHtml(e.name)}</div>
-        <div class="entry-meta">${e.duration_min ? formatNum(e.duration_min) + " min" : "�"}</div>
+        <div class="entry-name">${escapeHtml(e.name)}${
+          fromIron ? ` <span class="iron-tag">Iron</span>` : ""
+        }</div>
+        <div class="entry-meta">${escapeHtml(meta || "—")}</div>
       </div>
       <div class="entry-cals">+${formatNum(e.calories)}</div>
       <div class="entry-actions">
-        <button type="button" class="del-ex" data-id="${e.id}">??</button>
+        <button type="button" class="del-ex" data-id="${e.id}" aria-label="Delete">×</button>
       </div>
-    </div>`
-    )
+    </div>`;
+    })
     .join("");
   root.querySelectorAll(".del-ex").forEach((b) =>
     b.addEventListener("click", async () => {
@@ -2466,8 +2486,10 @@ function setup() {
       toast("Restore failed: " + err.message);
     }
   }
-  document.getElementById("export-json-btn").onclick = doBackup;
-  document.getElementById("backup-btn").onclick = doBackup;
+  const exportJsonBtn = document.getElementById("export-json-btn");
+  if (exportJsonBtn) exportJsonBtn.onclick = doBackup;
+  const backupBtn = document.getElementById("backup-btn");
+  if (backupBtn) backupBtn.onclick = doBackup;
   const backupBtn2 = document.getElementById("backup-btn-info");
   if (backupBtn2) backupBtn2.onclick = doBackup;
   document.getElementById("restore-input").onchange = async (e) => {
@@ -2600,9 +2622,7 @@ function renderPointsCard(d) {
   const rem = pts.remaining;
   const over = pts.over;
   document.getElementById("points-remaining").textContent = formatPoints(Math.abs(rem));
-  document.getElementById("points-remaining-label").textContent = over
-    ? "over budget"
-    : "left today";
+  document.getElementById("points-remaining-label").textContent = over ? "over" : "left";
   document.getElementById("points-budget").textContent = formatPoints(pts.budget);
   document.getElementById("points-used").textContent = formatPoints(pts.used);
   document.getElementById("points-earned").textContent =
@@ -2624,8 +2644,8 @@ function renderPointsCard(d) {
     hint.textContent = over
       ? `Over by ${formatPoints(Math.abs(rem))} pts. Protein-heavy picks cost less next meal.`
       : `${formatPoints(pts.used)} of ${formatPoints(pts.budget)} used` +
-        (pts.earned ? ` · exercise added ${formatPoints(pts.earned)}` : "") +
-        ` · weekly flex ~${formatPoints(pts.weeklyFlex)} if you want wiggle room.`;
+        (pts.earned ? ` · exercise +${formatPoints(pts.earned)}` : "") +
+        ` · flex ~${formatPoints(pts.weeklyFlex)}.`;
   }
 }
 
@@ -2672,6 +2692,27 @@ function renderFastingCard() {
   if (!card || !settings) return;
   try {
     const st = getFastingStatus(settings, new Date());
+    const compact = document.getElementById("fasting-compact");
+    const full = document.getElementById("fasting-full");
+    const enabled = !!st.enabled;
+
+    // Quiet diary: when fasting is off, only show a one-line enable control
+    if (compact) compact.hidden = enabled;
+    if (full) full.hidden = !enabled;
+
+    if (!enabled) {
+      if (fastingTimerId) {
+        clearInterval(fastingTimerId);
+        fastingTimerId = null;
+      }
+      const goalsSum = document.getElementById("goals-fast-summary");
+      if (goalsSum) {
+        const s = protocolSummary(settings);
+        goalsSum.textContent = `Your window: ${s.text} (starts ${settings.eating_window_start || "12:00"}).`;
+      }
+      return;
+    }
+
     const phaseEl = document.getElementById("fasting-phase");
     const timerEl = document.getElementById("fasting-timer");
     const detailEl = document.getElementById("fasting-detail");
@@ -2682,23 +2723,12 @@ function renderFastingCard() {
     }
     const sum = st.summary || protocolSummary(settings);
     const titleEl = document.getElementById("fasting-title");
-    if (titleEl) {
-      titleEl.textContent = st.enabled ? sum.label : "Intermittent fasting";
-    }
-    if (!st.enabled) {
-      if (timerEl) timerEl.textContent = "—";
-      if (detailEl) {
-        detailEl.textContent =
-          "Turn On below, then pick any window (12:12, 14:10, 16:8, 18:6, custom…).";
-      }
-      if (prog) prog.style.width = "0%";
-    } else {
-      if (timerEl) timerEl.textContent = fmtDuration(st.msRemaining);
-      if (detailEl) detailEl.textContent = `${st.title} · ${st.detail}`;
-      if (prog) {
-        prog.style.width = `${Math.min(100, st.progress * 100)}%`;
-        prog.style.background = st.phase === "fasting" ? "var(--protein)" : "var(--accent)";
-      }
+    if (titleEl) titleEl.textContent = sum.label || "Intermittent fasting";
+    if (timerEl) timerEl.textContent = fmtDuration(st.msRemaining);
+    if (detailEl) detailEl.textContent = `${st.title} · ${st.detail}`;
+    if (prog) {
+      prog.style.width = `${Math.min(100, st.progress * 100)}%`;
+      prog.style.background = st.phase === "fasting" ? "var(--protein)" : "var(--accent)";
     }
 
     // Sync quick controls (without fighting user mid-edit)
@@ -2726,10 +2756,7 @@ function renderFastingCard() {
       const eh = Math.floor(endMins / 60) % 24;
       const em = Math.round(endMins % 60);
       const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
-      sumEl.textContent =
-        settings.fasting_enabled === "1"
-          ? `Schedule: ${s.text}. Eating about ${settings.eating_window_start || "12:00"} → ~${endStr}.`
-          : `Preview: ${s.text}. Turn On to run the timer.`;
+      sumEl.textContent = `Schedule: ${s.text}. Eating about ${settings.eating_window_start || "12:00"} → ~${endStr}.`;
     }
 
     const goalsSum = document.getElementById("goals-fast-summary");
@@ -2739,13 +2766,11 @@ function renderFastingCard() {
     }
 
     if (fastingTimerId) clearInterval(fastingTimerId);
-    if (st.enabled) {
-      fastingTimerId = setInterval(() => {
-        if (document.getElementById("view-diary")?.classList.contains("active")) {
-          renderFastingCard();
-        }
-      }, 1000);
-    }
+    fastingTimerId = setInterval(() => {
+      if (document.getElementById("view-diary")?.classList.contains("active")) {
+        renderFastingCard();
+      }
+    }, 1000);
   } catch (err) {
     console.warn("renderFastingCard failed", err);
   }
@@ -2755,6 +2780,7 @@ function setupFastingButtons() {
   const endBtn = document.getElementById("fasting-end-meal");
   const clearBtn = document.getElementById("fasting-clear-meal");
   const resetBtn = document.getElementById("fasting-reset-timer");
+  const enableCompact = document.getElementById("fasting-enable-compact");
 
   const saveQuick = async (partial, msg) => {
     await setSettings(partial);
@@ -2762,6 +2788,12 @@ function setupFastingButtons() {
     if (msg) toast(msg);
     renderFastingCard();
   };
+
+  if (enableCompact) {
+    enableCompact.onclick = async () => {
+      await saveQuick({ fasting_enabled: "1" }, "Fasting on");
+    };
+  }
 
   if (endBtn) {
     endBtn.onclick = async () => {
@@ -3277,7 +3309,8 @@ async function boot() {
 /**
  * Accept session handoff from Iron Ledger (strength app).
  * Example:
- *   .../macroledger/?iron=1&date=2026-08-03&min=52&name=Iron+Ledger+·+Full+Body&auto=1
+ *   .../macroledger/?iron=1&date=2026-08-03&min=52&name=...&sets=12&dose=med&muscles=chest,lats&bw=82&auto=1
+ * Iron `bw` is kg; Macro weight is lb.
  */
 async function consumeIronLedgerHandoff() {
   const params = new URLSearchParams(window.location.search || "");
@@ -3295,7 +3328,22 @@ async function consumeIronLedgerHandoff() {
   } catch {
     /* keep raw */
   }
+  const sets = Math.max(0, parseInt(params.get("sets") || "0", 10) || 0);
+  const dose = String(params.get("dose") || "").toLowerCase(); // rough | med | oed
+  const muscles = String(params.get("muscles") || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const bwKg = parseFloat(params.get("bw") || "0") || 0;
   const auto = params.get("auto") === "1" || params.get("auto") === "true";
+
+  // Richer display name for the exercise log
+  const doseLabel = dose === "rough" ? "Low" : dose === "oed" ? "OED" : dose === "med" ? "MED" : "";
+  const bits = [];
+  if (sets > 0) bits.push(`${sets} hard sets`);
+  if (doseLabel) bits.push(doseLabel);
+  if (bits.length) name = `${name} · ${bits.join(" · ")}`;
 
   // Clean query so refresh doesn’t double-log
   try {
@@ -3313,6 +3361,28 @@ async function consumeIronLedgerHandoff() {
     /* loadDay may already have run */
   }
 
+  const noteParts = ["Imported from Iron Ledger"];
+  if (muscles.length) noteParts.push(muscles.join(", "));
+  if (doseLabel) noteParts.push(`dose ${doseLabel}`);
+  const note = noteParts.join(" · ");
+
+  /** Dose-aware burn multiplier (Rough easier / OED harder) */
+  function doseBurnMult(d) {
+    if (d === "rough") return 0.85;
+    if (d === "oed") return 1.1;
+    return 1;
+  }
+
+  async function weightForBurn() {
+    settings = await getSettings();
+    let w = await resolveWeightLb(settings);
+    // Iron sends kg — use only if Macro has no weight logged
+    if ((!w || w <= 0) && bwKg >= 30 && bwKg <= 250) {
+      w = Math.round(bwKg * 2.20462 * 10) / 10;
+    }
+    return w || 180;
+  }
+
   if (auto && min > 0) {
     // Avoid duplicate if same handoff already logged today (same name + duration)
     const existing = await exerciseForDate(date);
@@ -3326,20 +3396,23 @@ async function consumeIronLedgerHandoff() {
       return;
     }
 
-    settings = await getSettings();
-    const w = await resolveWeightLb(settings);
-    const est = estimateExerciseCalories("Weightlifting", min, w || 180);
-    const calories = est?.calories != null ? est.calories : Math.round(min * 5.5);
+    const w = await weightForBurn();
+    const est = estimateExerciseCalories("Weightlifting", min, w);
+    let calories = est?.calories != null ? est.calories : Math.round(min * 5.5);
+    calories = Math.max(1, Math.round(calories * doseBurnMult(dose)));
+    // Mild bump if many hard sets (more work density)
+    if (sets >= 18) calories = Math.round(calories * 1.08);
+    else if (sets >= 12) calories = Math.round(calories * 1.05);
 
     await addExercise({
       entry_date: date,
       name,
       duration_min: min,
       calories,
-      note: "Imported from Iron Ledger",
+      note,
       source: "iron_ledger",
     });
-    toast(`Iron Ledger · ${min} min · ~${calories} cal`);
+    toast(`Iron · ${min} min · ${sets ? sets + " sets · " : ""}~${calories} cal`);
     await loadDay();
     return;
   }
@@ -3353,15 +3426,19 @@ async function consumeIronLedgerHandoff() {
   if (modal) modal.hidden = false;
   try {
     const est = await (async () => {
-      settings = await getSettings();
-      const w = await resolveWeightLb(settings);
+      const w = await weightForBurn();
       return estimateExerciseCalories(nameEl?.value || "Weightlifting", parseFloat(durEl?.value) || 0, w);
     })();
     if (est?.calories != null) {
+      let calories = Math.max(1, Math.round(est.calories * doseBurnMult(dose)));
       const calEl = document.getElementById("ex-calories");
-      if (calEl) calEl.value = est.calories;
+      if (calEl) calEl.value = calories;
       const line = document.getElementById("ex-estimate-line");
-      if (line) line.innerHTML = `From Iron Ledger · estimate <strong>${est.calories} cal</strong>`;
+      if (line) {
+        line.innerHTML = `From Iron Ledger${doseLabel ? ` · ${doseLabel}` : ""}${
+          sets ? ` · ${sets} sets` : ""
+        } · estimate <strong>${calories} cal</strong>`;
+      }
     }
   } catch {
     /* ok */

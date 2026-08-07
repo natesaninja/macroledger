@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=33" />
-  <link rel="icon" href="icons/icon-192.png?v=33" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=33" />
+  <link rel="manifest" href="manifest.webmanifest?v=34" />
+  <link rel="icon" href="icons/icon-192.png?v=34" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=34" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=33" />
+  <link rel="stylesheet" href="css/app.css?v=34" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">Streak 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">v33</span>
+      <span id="app-version" class="app-version">v34</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -130,98 +130,127 @@
           <div class="density-row" id="density-row"></div>
         </div>
 
-        <!-- Ledger Points (WW-style) -->
-        <div class="points-card" id="points-card" hidden>
-          <div class="points-header">
-            <span id="points-title">Ledger Points</span>
+        <!-- Ledger Points (collapsed by default — quieter diary) -->
+        <details class="points-card diary-fold" id="points-card" hidden>
+          <summary class="diary-fold-sum">
+            <span class="dfs-title">Ledger Points</span>
             <span class="points-phase" id="points-status">—</span>
-          </div>
-          <div class="points-main">
-            <div class="points-big">
+            <span class="dfs-right">
               <span class="points-value" id="points-remaining">—</span>
-              <span class="points-unit" id="points-remaining-label">left today</span>
+              <span class="points-unit" id="points-remaining-label">left</span>
+            </span>
+          </summary>
+          <div class="diary-fold-body">
+            <div class="points-main">
+              <div class="points-stats">
+                <div class="points-stat"><span class="ps-l">Budget</span><span class="ps-v" id="points-budget">—</span></div>
+                <div class="points-stat"><span class="ps-l">Food</span><span class="ps-v" id="points-used">—</span></div>
+                <div class="points-stat"><span class="ps-l">Exercise</span><span class="ps-v accent" id="points-earned">—</span></div>
+              </div>
             </div>
-            <div class="points-stats">
-              <div class="points-stat"><span class="ps-l">Budget</span><span class="ps-v" id="points-budget">—</span></div>
-              <div class="points-stat"><span class="ps-l">Food</span><span class="ps-v" id="points-used">—</span></div>
-              <div class="points-stat"><span class="ps-l">Exercise</span><span class="ps-v accent" id="points-earned">—</span></div>
-            </div>
+            <div class="points-bar"><i id="points-progress"></i></div>
+            <p class="hint" id="points-hint" style="margin:0.45rem 0 0">
+              SmartPoints-matched — protein lowers points; sugar &amp; sat fat raise them.
+            </p>
           </div>
-          <div class="points-bar"><i id="points-progress"></i></div>
-          <p class="hint" id="points-hint" style="margin:0.45rem 0 0">
-            SmartPoints-matched — protein lowers points; sugar &amp; sat fat raise them.
-          </p>
-        </div>
+        </details>
 
-        <!-- Intermittent fasting -->
+        <!-- Intermittent fasting: compact when off -->
         <div class="fasting-card" id="fasting-card">
-          <div class="fasting-header">
-            <span id="fasting-title">Intermittent fasting</span>
-            <span class="fasting-phase" id="fasting-phase">Off</span>
+          <div class="fasting-compact" id="fasting-compact">
+            <span>Fasting off</span>
+            <button type="button" class="ghost-btn tiny" id="fasting-enable-compact">Turn on</button>
           </div>
-          <div class="fasting-timer" id="fasting-timer">—</div>
-          <div class="fasting-detail" id="fasting-detail">Pick a window below (16:8, 18:6, custom, …).</div>
-          <div class="fasting-bar"><i id="fasting-progress"></i></div>
-          <div class="fasting-quick" id="fasting-quick">
-            <div class="fasting-quick-row">
-              <label class="fasting-inline">
-                On
-                <select id="fast-enabled-quick" aria-label="Fasting on or off">
-                  <option value="0">Off</option>
-                  <option value="1">On</option>
-                </select>
-              </label>
-              <label class="fasting-inline">
-                Window
-                <select id="fast-protocol-quick" aria-label="Fasting protocol">
-                  <option value="12:12">12:12 — 12h fast · 12h eat</option>
-                  <option value="14:10">14:10 — 14h fast · 10h eat</option>
-                  <option value="15:9">15:9 — 15h fast · 9h eat</option>
-                  <option value="16:8" selected>16:8 — 16h fast · 8h eat</option>
-                  <option value="18:6">18:6 — 18h fast · 6h eat</option>
-                  <option value="20:4">20:4 — 20h fast · 4h eat</option>
-                  <option value="omad">OMAD — ~1h eat</option>
-                  <option value="custom">Custom — set eat hours</option>
-                </select>
-              </label>
-              <label class="fasting-inline">
-                Eat from
-                <input type="time" id="fast-start-quick" aria-label="Eating window start" />
-              </label>
-              <label class="fasting-inline" id="fast-custom-wrap" hidden>
-                Eat hours
-                <input type="number" id="fast-custom-quick" min="1" max="23" step="0.5" value="8" aria-label="Custom eating hours" />
-              </label>
+          <div class="fasting-full" id="fasting-full" hidden>
+            <div class="fasting-header">
+              <span id="fasting-title">Intermittent fasting</span>
+              <span class="fasting-phase" id="fasting-phase">Off</span>
             </div>
-            <p class="hint" id="fast-window-summary" style="margin:0.4rem 0 0">—</p>
-          </div>
-          <div class="fasting-actions">
-            <button type="button" class="ghost-btn" id="fasting-end-meal">I just finished eating</button>
-            <button type="button" class="ghost-btn" id="fasting-reset-timer">↻ Reset timer</button>
-            <button type="button" class="ghost-btn" id="fasting-clear-meal">Use schedule only</button>
+            <div class="fasting-timer" id="fasting-timer">—</div>
+            <div class="fasting-detail" id="fasting-detail">Pick a window below.</div>
+            <div class="fasting-bar"><i id="fasting-progress"></i></div>
+            <div class="fasting-quick" id="fasting-quick">
+              <div class="fasting-quick-row">
+                <label class="fasting-inline">
+                  On
+                  <select id="fast-enabled-quick" aria-label="Fasting on or off">
+                    <option value="0">Off</option>
+                    <option value="1">On</option>
+                  </select>
+                </label>
+                <label class="fasting-inline">
+                  Window
+                  <select id="fast-protocol-quick" aria-label="Fasting protocol">
+                    <option value="12:12">12:12 — 12h fast · 12h eat</option>
+                    <option value="14:10">14:10 — 14h fast · 10h eat</option>
+                    <option value="15:9">15:9 — 15h fast · 9h eat</option>
+                    <option value="16:8" selected>16:8 — 16h fast · 8h eat</option>
+                    <option value="18:6">18:6 — 18h fast · 6h eat</option>
+                    <option value="20:4">20:4 — 20h fast · 4h eat</option>
+                    <option value="omad">OMAD — ~1h eat</option>
+                    <option value="custom">Custom — set eat hours</option>
+                  </select>
+                </label>
+                <label class="fasting-inline">
+                  Eat from
+                  <input type="time" id="fast-start-quick" aria-label="Eating window start" />
+                </label>
+                <label class="fasting-inline" id="fast-custom-wrap" hidden>
+                  Eat hours
+                  <input type="number" id="fast-custom-quick" min="1" max="23" step="0.5" value="8" aria-label="Custom eating hours" />
+                </label>
+              </div>
+              <p class="hint" id="fast-window-summary" style="margin:0.4rem 0 0">—</p>
+            </div>
+            <div class="fasting-actions">
+              <button type="button" class="ghost-btn" id="fasting-end-meal">I just finished eating</button>
+              <button type="button" class="ghost-btn" id="fasting-reset-timer">↻ Reset timer</button>
+              <button type="button" class="ghost-btn" id="fasting-clear-meal">Use schedule only</button>
+            </div>
           </div>
         </div>
 
-        <!-- One-tap logging strip -->
+        <!-- One-tap logging strip (primary chips + more) -->
         <div class="quick-log card-lite">
           <div class="quick-log-title">Quick log</div>
           <div class="quick-actions">
-            <button type="button" class="chip-btn" id="btn-photo-log">Photo meal</button>
-            <button type="button" class="chip-btn" id="btn-scan-label">Scan label</button>
-            <button type="button" class="chip-btn" id="btn-scan-barcode">Barcode</button>
-            <button type="button" class="chip-btn" id="btn-voice-log">Voice / text</button>
-            <button type="button" class="chip-btn" id="btn-restaurant-build">Restaurant</button>
-            <button type="button" class="chip-btn" id="btn-show-again">Again</button>
-            <button type="button" class="chip-btn" id="btn-show-saved-meals">Meals</button>
-            <button type="button" class="chip-btn" id="btn-show-recents">Recents</button>
-            <button type="button" class="chip-btn" id="btn-show-favs">Favorites</button>
+            <button type="button" class="chip-btn primary-chip" id="btn-photo-log">Photo meal</button>
+            <button type="button" class="chip-btn primary-chip" id="btn-scan-barcode">Barcode</button>
+            <button type="button" class="chip-btn primary-chip" id="btn-voice-log">Voice / text</button>
+            <button type="button" class="chip-btn primary-chip" id="btn-show-saved-meals">Meals</button>
           </div>
+          <details class="quick-more">
+            <summary class="quick-more-sum">More ways to log</summary>
+            <div class="quick-actions quick-more-actions">
+              <button type="button" class="chip-btn" id="btn-scan-label">Scan label</button>
+              <button type="button" class="chip-btn" id="btn-restaurant-build">Restaurant</button>
+              <button type="button" class="chip-btn" id="btn-show-again">Again</button>
+              <button type="button" class="chip-btn" id="btn-show-recents">Recents</button>
+              <button type="button" class="chip-btn" id="btn-show-favs">Favorites</button>
+            </div>
+            <p class="hint photo-log-hint" id="photo-log-hint" style="margin:0.45rem 0 0">
+              Photo = plate · Label = Nutrition Facts · Needs internet · Free daily limit
+            </p>
+          </details>
           <input type="file" id="photo-log-input" accept="image/*" capture="environment" hidden />
           <input type="file" id="label-scan-input" accept="image/*" capture="environment" hidden />
-          <p class="hint photo-log-hint" id="photo-log-hint" style="margin:0.45rem 0 0">
-            Photo meal = plate. Scan label = Nutrition Facts panel (macros filled for you). Free daily limit. Needs internet.
-          </p>
           <div class="quick-rail" id="quick-rail"></div>
+        </div>
+
+        <!-- Iron Ledger bridge -->
+        <div class="iron-bridge card-lite" id="iron-bridge-row">
+          <div class="iron-bridge-text">
+            <strong>Iron Ledger</strong>
+            <span class="hint" style="margin:0">Lifts stay there · burn lands here</span>
+          </div>
+          <a
+            class="ghost-btn"
+            id="btn-open-iron"
+            href="https://natesaninja.github.io/iron-ledger/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Open Iron</a
+          >
         </div>
 
         <div class="burn-card" id="burn-card">
@@ -234,7 +263,6 @@
 
         <div class="toolbar-row">
           <button type="button" class="ghost-btn" id="copy-yesterday-btn">Copy yesterday</button>
-          <button type="button" class="ghost-btn" id="export-json-btn">Backup</button>
         </div>
 
         <div class="water-card">
@@ -926,6 +954,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=33"></script>
+  <script type="module" src="js/app.js?v=34"></script>
 </body>
 </html>

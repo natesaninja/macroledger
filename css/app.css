@@ -2557,3 +2557,151 @@ body {
   transition: width 0.4s ease;
 }
 .points-bar > i.over { background: linear-gradient(90deg, #e85d75, #ff8fa3); }
+
+/* ---- v34 Quiet diary + Iron bridge ---- */
+.diary-fold {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+.diary-fold-sum {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+  padding: 0.7rem 0.9rem;
+  min-height: 48px;
+  user-select: none;
+}
+.diary-fold-sum::-webkit-details-marker { display: none; }
+.dfs-title {
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.02em;
+}
+.dfs-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+.dfs-right .points-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.dfs-right .points-unit {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.diary-fold-body {
+  padding: 0 0.9rem 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.diary-fold[open] .diary-fold-sum {
+  border-bottom: none;
+}
+
+.fasting-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+.fasting-compact[hidden],
+.fasting-full[hidden] {
+  display: none !important;
+}
+.ghost-btn.tiny {
+  min-height: 36px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.chip-btn.primary-chip {
+  font-weight: 700;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--accent-dim);
+}
+.quick-more {
+  margin-top: 0.45rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.35rem;
+}
+.quick-more-sum {
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.35rem 0;
+  user-select: none;
+}
+.quick-more-sum::-webkit-details-marker { display: none; }
+.quick-more-sum::after {
+  content: " ▾";
+  opacity: 0.7;
+}
+.quick-more[open] .quick-more-sum::after {
+  content: " ▴";
+}
+.quick-more-actions {
+  margin-top: 0.35rem;
+}
+
+.iron-bridge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.7rem 0.9rem;
+}
+.iron-bridge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.iron-bridge-text strong {
+  font-size: 0.88rem;
+}
+.iron-bridge a.ghost-btn {
+  text-decoration: none;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iron-tag {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  vertical-align: middle;
+  margin-left: 0.25rem;
+}
+.entry-iron {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.35rem;
+}
