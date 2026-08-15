@@ -8,6 +8,11 @@ If you still see CalorieTrack, you are on the OLD app. Delete that home screen i
 
 **Look:** Quiet ledger — warm paper theme, Source Serif + IBM Plex Sans, text actions (v15).
 
+## Iron Ledger bridge
+
+Finish a session in [Iron Ledger](https://natesaninja.github.io/iron-ledger/) → **Open MacroLedger**.  
+Macro auto-logs exercise burn, then shows a **protein left today** card with **Log post-workout meal** / **Photo meal**.
+
 ## Photo meal (ready for everyone)
 
 **No setup for people using the app.** Diary → **Photo meal** → snap a plate → review → Save.

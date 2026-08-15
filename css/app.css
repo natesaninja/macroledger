@@ -2705,3 +2705,45 @@ body {
   border-left: 3px solid var(--accent);
   padding-left: 0.35rem;
 }
+
+/* Iron Ledger post-session handoff */
+.iron-handoff-card {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--card, var(--surface, #f7f4ee)));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.iron-handoff-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+.iron-handoff-head strong {
+  flex: 1;
+  font-size: 0.95rem;
+}
+.iron-handoff-line,
+.iron-handoff-protein {
+  margin: 0.2rem 0;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  color: var(--muted, var(--text-dim, #5c564c));
+}
+.iron-handoff-protein {
+  color: var(--text, inherit);
+  font-weight: 500;
+}
+.iron-handoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+.iron-handoff-card .primary-btn.tiny,
+.iron-handoff-card .ghost-btn.tiny {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.7rem;
+}

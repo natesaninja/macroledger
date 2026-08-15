@@ -108,6 +108,21 @@
           <button type="button" class="ghost-btn" id="today-btn">Today</button>
         </div>
 
+        <!-- Post Iron Ledger session: protein nudge + meal shortcut -->
+        <div class="iron-handoff-card" id="iron-handoff-card" hidden>
+          <div class="iron-handoff-head">
+            <span class="iron-tag">Iron</span>
+            <strong id="iron-handoff-title">Session logged</strong>
+            <button type="button" class="icon-btn tiny" id="iron-handoff-dismiss" aria-label="Dismiss">×</button>
+          </div>
+          <p class="iron-handoff-line" id="iron-handoff-session"></p>
+          <p class="iron-handoff-protein" id="iron-handoff-protein"></p>
+          <div class="iron-handoff-actions">
+            <button type="button" class="primary-btn tiny" id="iron-handoff-meal">Log post-workout meal</button>
+            <button type="button" class="ghost-btn tiny" id="iron-handoff-photo">Photo meal</button>
+          </div>
+        </div>
+
         <div class="summary-card">
           <div class="ring-wrap">
             <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">

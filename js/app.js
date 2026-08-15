@@ -3306,10 +3306,153 @@ async function boot() {
   }
 }
 
+/** Human labels for Iron muscle ids (handoff card). */
+const IRON_MUSCLE_LABELS = {
+  chest: "Chest",
+  lats: "Lats",
+  upper_back: "Upper back",
+  quads: "Quads",
+  hamstrings: "Hamstrings",
+  glutes: "Glutes",
+  front_delts: "Front delts",
+  side_delts: "Side delts",
+  rear_delts: "Rear delts",
+  biceps: "Biceps",
+  triceps: "Triceps",
+  calves: "Calves",
+  core: "Core",
+  traps: "Traps",
+  lower_back: "Lower back",
+};
+
+const IRON_PROGRAM_LABELS = {
+  bbb_531: "BBB",
+  ppl_hyper: "PPL",
+  ul_hyper: "Upper/Lower",
+  bro_classic: "Bro split",
+};
+
+/**
+ * Parse ?msets=chest:4,lats:3 from Iron handoff.
+ * @returns {Record<string, number>}
+ */
+function parseIronMsets(raw) {
+  const out = {};
+  String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((pair) => {
+      const [id, n] = pair.split(":");
+      const v = parseInt(n, 10);
+      if (id && v > 0) out[id.trim()] = v;
+    });
+  return out;
+}
+
+function hideIronHandoffCard() {
+  const card = document.getElementById("iron-handoff-card");
+  if (card) card.hidden = true;
+}
+
+/**
+ * Show post-lift protein card + meal shortcuts after Iron handoff.
+ * @param {object} ctx
+ */
+async function showIronHandoffCard(ctx) {
+  const card = document.getElementById("iron-handoff-card");
+  if (!card) return;
+
+  settings = await getSettings();
+  const goals = goalsFromSettings(settings);
+  const entries = await diaryForDate(ctx.date || currentDate);
+  const proteinEaten = entries.reduce((s, e) => s + (Number(e.protein) || 0), 0);
+  const proteinGoal = goals.protein || 150;
+  const proteinLeft = Math.max(0, Math.round(proteinGoal - proteinEaten));
+
+  // Suggest a practical post-lift bite (not the whole day remaining if huge)
+  let bite = proteinLeft;
+  if (proteinLeft >= 50) bite = Math.min(40, proteinLeft);
+  else if (proteinLeft >= 25) bite = proteinLeft;
+  else if (proteinLeft > 0) bite = proteinLeft;
+  else bite = 0;
+
+  const titleEl = document.getElementById("iron-handoff-title");
+  const sessEl = document.getElementById("iron-handoff-session");
+  const protEl = document.getElementById("iron-handoff-protein");
+  if (titleEl) {
+    titleEl.textContent = ctx.duplicate ? "Session already on this day" : "Session logged from Iron";
+  }
+
+  const modeBits = [];
+  if (ctx.label) modeBits.push(ctx.label);
+  if (ctx.program) modeBits.push(IRON_PROGRAM_LABELS[ctx.program] || ctx.program);
+  else if (ctx.mode && ctx.mode !== "med") modeBits.push(ctx.mode);
+  if (ctx.sets > 0) modeBits.push(`${ctx.sets} hard sets`);
+  if (ctx.min > 0) modeBits.push(`${ctx.min} min`);
+  if (ctx.doseLabel) modeBits.push(ctx.doseLabel);
+  if (ctx.calories) modeBits.push(`~${ctx.calories} cal burned`);
+
+  const msetTop = Object.entries(ctx.msets || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([id, n]) => `${IRON_MUSCLE_LABELS[id] || id} ${n}`)
+    .join(" · ");
+
+  if (sessEl) {
+    const line1 = modeBits.filter(Boolean).join(" · ") || "Strength session";
+    sessEl.textContent = msetTop ? `${line1} · ${msetTop}` : line1;
+  }
+
+  if (protEl) {
+    if (proteinLeft <= 0) {
+      protEl.textContent = `Protein goal met for the day (${Math.round(proteinEaten)} / ${proteinGoal} g). Still fine to eat if hungry.`;
+    } else if (bite >= 25) {
+      protEl.textContent = `Protein left today: ~${proteinLeft} g of ${proteinGoal} g. Aim for ~${bite} g in your next meal to support recovery.`;
+    } else {
+      protEl.textContent = `Protein left today: ~${proteinLeft} g of ${proteinGoal} g. A small protein-forward snack is enough.`;
+    }
+  }
+
+  card.hidden = false;
+  // Wire actions once per show
+  const dismiss = document.getElementById("iron-handoff-dismiss");
+  if (dismiss) dismiss.onclick = () => hideIronHandoffCard();
+  const mealBtn = document.getElementById("iron-handoff-meal");
+  if (mealBtn) {
+    mealBtn.onclick = () => {
+      // Snacks = post-workout default; user can change meal pill
+      openModal("snacks");
+      const search = document.getElementById("food-search");
+      if (search) {
+        search.placeholder =
+          bite > 0 ? `Post-workout · ~${bite} g protein` : "Post-workout meal";
+        search.focus();
+      }
+      toast(bite > 0 ? `Target ~${bite} g protein in this meal` : "Log a post-workout meal");
+    };
+  }
+  const photoBtn = document.getElementById("iron-handoff-photo");
+  if (photoBtn) {
+    photoBtn.onclick = () => {
+      const trigger = document.getElementById("btn-photo-log");
+      if (trigger) trigger.click();
+      else toast("Photo meal isn’t available right now");
+    };
+  }
+
+  try {
+    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch {
+    /* ok */
+  }
+}
+
 /**
  * Accept session handoff from Iron Ledger (strength app).
  * Example:
- *   .../macroledger/?iron=1&date=2026-08-03&min=52&name=...&sets=12&dose=med&muscles=chest,lats&bw=82&auto=1
+ *   .../macroledger/?iron=1&date=2026-08-03&min=52&name=...&sets=12&dose=med&muscles=chest,lats
+ *   &msets=chest:4&mode=program&program=bbb_531&label=Squat&bw=82&auto=1
  * Iron `bw` is kg; Macro weight is lb.
  */
 async function consumeIronLedgerHandoff() {
@@ -3335,6 +3478,15 @@ async function consumeIronLedgerHandoff() {
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 6);
+  const msets = parseIronMsets(params.get("msets"));
+  const mode = String(params.get("mode") || "").toLowerCase() || "med";
+  const program = String(params.get("program") || "").trim();
+  let label = params.get("label") || "";
+  try {
+    if (label) label = decodeURIComponent(label.replace(/\+/g, " "));
+  } catch {
+    /* keep */
+  }
   const bwKg = parseFloat(params.get("bw") || "0") || 0;
   const auto = params.get("auto") === "1" || params.get("auto") === "true";
 
@@ -3343,6 +3495,7 @@ async function consumeIronLedgerHandoff() {
   const bits = [];
   if (sets > 0) bits.push(`${sets} hard sets`);
   if (doseLabel) bits.push(doseLabel);
+  if (program) bits.push(IRON_PROGRAM_LABELS[program] || program);
   if (bits.length) name = `${name} · ${bits.join(" · ")}`;
 
   // Clean query so refresh doesn’t double-log
@@ -3362,8 +3515,10 @@ async function consumeIronLedgerHandoff() {
   }
 
   const noteParts = ["Imported from Iron Ledger"];
+  if (label) noteParts.push(label);
   if (muscles.length) noteParts.push(muscles.join(", "));
   if (doseLabel) noteParts.push(`dose ${doseLabel}`);
+  if (mode && mode !== "med") noteParts.push(mode);
   const note = noteParts.join(" · ");
 
   /** Dose-aware burn multiplier (Rough easier / OED harder) */
@@ -3383,6 +3538,20 @@ async function consumeIronLedgerHandoff() {
     return w || 180;
   }
 
+  const handoffCtx = {
+    date,
+    min,
+    sets,
+    doseLabel,
+    mode,
+    program,
+    label,
+    muscles,
+    msets,
+    duplicate: false,
+    calories: null,
+  };
+
   if (auto && min > 0) {
     // Avoid duplicate if same handoff already logged today (same name + duration)
     const existing = await exerciseForDate(date);
@@ -3393,6 +3562,8 @@ async function consumeIronLedgerHandoff() {
     );
     if (dup) {
       toast("Iron Ledger session already logged today");
+      handoffCtx.duplicate = true;
+      await showIronHandoffCard(handoffCtx);
       return;
     }
 
@@ -3414,6 +3585,8 @@ async function consumeIronLedgerHandoff() {
     });
     toast(`Iron · ${min} min · ${sets ? sets + " sets · " : ""}~${calories} cal`);
     await loadDay();
+    handoffCtx.calories = calories;
+    await showIronHandoffCard(handoffCtx);
     return;
   }
 
@@ -3439,11 +3612,14 @@ async function consumeIronLedgerHandoff() {
           sets ? ` · ${sets} sets` : ""
         } · estimate <strong>${calories} cal</strong>`;
       }
+      handoffCtx.calories = calories;
     }
   } catch {
     /* ok */
   }
   toast("Iron Ledger session ready — review & Add");
+  // Still show protein card so meal CTA is available before they confirm exercise
+  await showIronHandoffCard(handoffCtx);
 }
 
 boot().catch((err) => {
