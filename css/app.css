@@ -2706,6 +2706,67 @@ body {
   padding-left: 0.35rem;
 }
 
+/* Training week strip (Iron lift days + protein) */
+.week-strip {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card, var(--surface, #f7f4ee));
+}
+.week-strip-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+  margin-bottom: 0.45rem;
+}
+.week-strip-head strong {
+  font-size: 0.92rem;
+}
+.week-strip-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+.week-day {
+  text-align: center;
+  padding: 0.3rem 0.1rem;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--border) 25%, transparent);
+}
+.week-day .wd-dow {
+  display: block;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.week-day .wd-mark {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-top: 0.1rem;
+}
+.week-day.is-lift {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.week-day.is-protein {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.week-day.is-lift.is-protein {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.week-day.is-today {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 35%, transparent);
+}
+.week-day.is-lift:not(.is-protein) .wd-mark {
+  color: color-mix(in srgb, var(--accent) 70%, #b45);
+}
+
 /* Iron Ledger post-session handoff */
 .iron-handoff-card {
   margin: 0 0 0.75rem;

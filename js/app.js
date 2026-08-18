@@ -438,6 +438,106 @@ function renderDay(d) {
   const copyBtn = document.getElementById("copy-yesterday-btn");
   if (copyBtn) copyBtn.disabled = prevTotal === 0;
   updateIronBridgeLink();
+  await renderTrainingWeekStrip(goals.protein);
+}
+
+/** Mon–Sun ISO dates for the week containing `iso`. */
+function weekDatesContaining(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const day = dt.getDay(); // 0 Sun
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(dt);
+  mon.setDate(dt.getDate() + diff);
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const x = new Date(mon);
+    x.setDate(mon.getDate() + i);
+    const yy = x.getFullYear();
+    const mm = String(x.getMonth() + 1).padStart(2, "0");
+    const dd = String(x.getDate()).padStart(2, "0");
+    out.push(`${yy}-${mm}-${dd}`);
+  }
+  return out;
+}
+
+function isIronExercise(e) {
+  return e?.source === "iron_ledger" || String(e?.name || "").startsWith("Iron Ledger");
+}
+
+/**
+ * Week strip: lift days (Iron handoff) + protein goal hit.
+ */
+async function renderTrainingWeekStrip(proteinGoal) {
+  const el = document.getElementById("training-week-strip");
+  if (!el) return;
+  const anchor = currentDate || todayISO();
+  const days = weekDatesContaining(anchor);
+  const goal = proteinGoal || goalsFromSettings(settings || {}).protein || 150;
+  const today = todayISO();
+  const dowNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  let liftDays = 0;
+  let liftProteinHits = 0;
+  const cells = [];
+
+  for (let i = 0; i < days.length; i++) {
+    const iso = days[i];
+    const [exRows, foodRows] = await Promise.all([exerciseForDate(iso), diaryForDate(iso)]);
+    const isLift = exRows.some(isIronExercise);
+    const protein = foodRows.reduce((s, e) => s + (Number(e.protein) || 0), 0);
+    const proteinHit = protein >= goal * 0.95;
+    if (isLift) {
+      liftDays += 1;
+      if (proteinHit) liftProteinHits += 1;
+    }
+    let mark = "·";
+    if (isLift && proteinHit) mark = "✓";
+    else if (isLift) mark = "L";
+    else if (proteinHit) mark = "P";
+    cells.push({
+      iso,
+      dow: dowNames[i],
+      isLift,
+      proteinHit,
+      isToday: iso === today,
+      mark,
+      title: `${iso}${isLift ? " · lift" : ""}${proteinHit ? " · protein hit" : protein ? ` · ${Math.round(protein)}g P` : ""}`,
+    });
+  }
+
+  if (!liftDays && !cells.some((c) => c.proteinHit)) {
+    // Keep quiet until there's signal — still show empty week once user has any diary? Show always for consistency with Iron.
+  }
+
+  const headline =
+    liftDays > 0
+      ? `Lift days ${liftProteinHits}/${liftDays} hit protein`
+      : "No Iron lift days this week yet";
+  const sub =
+    liftDays > 0
+      ? `Goal ${Math.round(goal)} g · open Iron after training to log burn`
+      : "Finish a session in Iron → Open MacroLedger to mark a lift day";
+
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="week-strip-head">
+      <strong>${escapeHtml(headline)}</strong>
+      <span class="dim">${escapeHtml(sub)}</span>
+    </div>
+    <div class="week-strip-days">
+      ${cells
+        .map(
+          (c) => `
+        <div class="week-day${c.isLift ? " is-lift" : ""}${c.proteinHit ? " is-protein" : ""}${
+          c.isToday ? " is-today" : ""
+        }" title="${escapeHtml(c.title)}">
+          <span class="wd-dow">${escapeHtml(c.dow)}</span>
+          <span class="wd-mark">${c.mark}</span>
+        </div>`
+        )
+        .join("")}
+    </div>`;
 }
 
 /** Keep Open Iron deep-link pointed at today's diary date (Iron may ignore ?day=). */

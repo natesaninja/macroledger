@@ -13,6 +13,8 @@ If you still see CalorieTrack, you are on the OLD app. Delete that home screen i
 Finish a session in [Iron Ledger](https://natesaninja.github.io/iron-ledger/) → **Open MacroLedger**.  
 Macro auto-logs exercise burn, then shows a **protein left today** card with **Log post-workout meal** / **Photo meal**.
 
+**Training week strip** on Diary: Mon–Sun lift days (from Iron) vs protein goal hits (`L` = lift, `P` = protein, `✓` = both).
+
 ## Photo meal (ready for everyone)
 
 **No setup for people using the app.** Diary → **Photo meal** → snap a plate → review → Save.
