@@ -386,7 +386,7 @@ async function loadDay() {
 
 function renderDay(d) {
   document.getElementById("date-label").textContent = formatDateLabel(currentDate);
-  document.getElementById("greeting").textContent = `${d.user_name}'s diary � on device`;
+  document.getElementById("greeting").textContent = `${d.user_name}'s diary · on device`;
 
   const rem = d.remaining.calories;
   const over = rem < 0;
@@ -438,7 +438,10 @@ function renderDay(d) {
   const copyBtn = document.getElementById("copy-yesterday-btn");
   if (copyBtn) copyBtn.disabled = prevTotal === 0;
   updateIronBridgeLink();
-  await renderTrainingWeekStrip(goals.protein);
+  // Fire-and-forget — renderDay must stay sync
+  renderTrainingWeekStrip(d.goals?.protein).catch((err) =>
+    console.warn("week strip failed", err)
+  );
 }
 
 /** Mon–Sun ISO dates for the week containing `iso`. */
