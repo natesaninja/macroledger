@@ -105,6 +105,13 @@ import {
   daysSinceFileBackup,
   APP_CACHE,
 } from "./persist.js";
+import {
+  parseIronMsets,
+  doseBurnMult,
+  isDuplicateIronExercise,
+  clearStoredHandoff,
+  resolveHandoffSource,
+} from "./iron-bridge.js";
 
 const MEALS = [
   { id: "breakfast", label: "Breakfast", icon: "" },
@@ -3269,6 +3276,18 @@ async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   wireServiceWorkerLifecycle();
   try {
+    // One worker only: unregister leftover sw.js (or any other) so they cannot fight sw-ml.js
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const r of regs) {
+      const script = r.active?.scriptURL || r.waiting?.scriptURL || r.installing?.scriptURL || "";
+      if (script && !script.endsWith("/sw-ml.js") && !script.endsWith("sw-ml.js")) {
+        try {
+          await r.unregister();
+        } catch {
+          /* ok */
+        }
+      }
+    }
     // Stable URL (no query) so registration does not thrash every version bump
     swReg = await navigator.serviceWorker.register("./sw-ml.js", {
       updateViaCache: "none",
@@ -3435,24 +3454,6 @@ const IRON_PROGRAM_LABELS = {
   bro_classic: "Bro split",
 };
 
-/**
- * Parse ?msets=chest:4,lats:3 from Iron handoff.
- * @returns {Record<string, number>}
- */
-function parseIronMsets(raw) {
-  const out = {};
-  String(raw || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .forEach((pair) => {
-      const [id, n] = pair.split(":");
-      const v = parseInt(n, 10);
-      if (id && v > 0) out[id.trim()] = v;
-    });
-  return out;
-}
-
 function hideIronHandoffCard() {
   const card = document.getElementById("iron-handoff-card");
   if (card) card.hidden = true;
@@ -3559,39 +3560,32 @@ async function showIronHandoffCard(ctx) {
  * Iron `bw` is kg; Macro weight is lb.
  */
 async function consumeIronLedgerHandoff() {
-  const params = new URLSearchParams(window.location.search || "");
-  const fromIron =
-    params.get("iron") === "1" ||
-    params.get("from") === "iron-ledger" ||
-    params.get("from") === "ironledger";
-  if (!fromIron) return;
+  const resolved = resolveHandoffSource({ search: window.location.search || "" });
+  const p = resolved.params;
+  if (!p?.fromIron) return;
 
-  const date = (params.get("date") || todayISO()).slice(0, 10);
-  const min = Math.max(0, parseFloat(params.get("min") || params.get("minutes") || "0") || 0);
-  let name = params.get("name") || "Iron Ledger · Strength";
+  const date = (p.date || todayISO()).slice(0, 10);
+  const min = Math.max(0, Number(p.min) || 0);
+  let name = p.name || "Iron Ledger · Strength";
+  const sets = Math.max(0, Number(p.sets) || 0);
+  const dose = String(p.dose || "").toLowerCase(); // rough | med | oed
+  const muscles = Array.isArray(p.muscles) ? p.muscles.slice(0, 6) : [];
+  const msets = p.msets && typeof p.msets === "object" ? p.msets : parseIronMsets("");
+  const mode = String(p.mode || "").toLowerCase() || "med";
+  const program = String(p.program || "").trim();
+  const label = p.label || "";
+  const bwKg = Number(p.bwKg) || 0;
+  const auto = !!p.auto;
+
+  // Clean query so refresh doesn't double-log
   try {
-    name = decodeURIComponent(name.replace(/\+/g, " "));
+    const clean = window.location.pathname + (window.location.hash || "");
+    window.history.replaceState({}, "", clean);
   } catch {
-    /* keep raw */
+    /* ok */
   }
-  const sets = Math.max(0, parseInt(params.get("sets") || "0", 10) || 0);
-  const dose = String(params.get("dose") || "").toLowerCase(); // rough | med | oed
-  const muscles = String(params.get("muscles") || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-  const msets = parseIronMsets(params.get("msets"));
-  const mode = String(params.get("mode") || "").toLowerCase() || "med";
-  const program = String(params.get("program") || "").trim();
-  let label = params.get("label") || "";
-  try {
-    if (label) label = decodeURIComponent(label.replace(/\+/g, " "));
-  } catch {
-    /* keep */
-  }
-  const bwKg = parseFloat(params.get("bw") || "0") || 0;
-  const auto = params.get("auto") === "1" || params.get("auto") === "true";
+  // Drop storage payload after ingest so the same handoff cannot re-apply
+  clearStoredHandoff();
 
   // Richer display name for the exercise log
   const doseLabel = dose === "rough" ? "Low" : dose === "oed" ? "OED" : dose === "med" ? "MED" : "";
@@ -3600,14 +3594,6 @@ async function consumeIronLedgerHandoff() {
   if (doseLabel) bits.push(doseLabel);
   if (program) bits.push(IRON_PROGRAM_LABELS[program] || program);
   if (bits.length) name = `${name} · ${bits.join(" · ")}`;
-
-  // Clean query so refresh doesn’t double-log
-  try {
-    const clean = window.location.pathname + (window.location.hash || "");
-    window.history.replaceState({}, "", clean);
-  } catch {
-    /* ok */
-  }
 
   // Jump diary to that day
   currentDate = date;
@@ -3623,13 +3609,6 @@ async function consumeIronLedgerHandoff() {
   if (doseLabel) noteParts.push(`dose ${doseLabel}`);
   if (mode && mode !== "med") noteParts.push(mode);
   const note = noteParts.join(" · ");
-
-  /** Dose-aware burn multiplier (Rough easier / OED harder) */
-  function doseBurnMult(d) {
-    if (d === "rough") return 0.85;
-    if (d === "oed") return 1.1;
-    return 1;
-  }
 
   async function weightForBurn() {
     settings = await getSettings();
@@ -3656,14 +3635,8 @@ async function consumeIronLedgerHandoff() {
   };
 
   if (auto && min > 0) {
-    // Avoid duplicate if same handoff already logged today (same name + duration)
     const existing = await exerciseForDate(date);
-    const dup = existing.some(
-      (e) =>
-        (e.source === "iron_ledger" || (e.name || "").startsWith("Iron Ledger")) &&
-        Number(e.duration_min) === min
-    );
-    if (dup) {
+    if (isDuplicateIronExercise(existing, { min, name })) {
       toast("Iron Ledger session already logged today");
       handoffCtx.duplicate = true;
       await showIronHandoffCard(handoffCtx);
@@ -3724,6 +3697,7 @@ async function consumeIronLedgerHandoff() {
   // Still show protein card so meal CTA is available before they confirm exercise
   await showIronHandoffCard(handoffCtx);
 }
+
 
 boot().catch((err) => {
   console.error(err);
