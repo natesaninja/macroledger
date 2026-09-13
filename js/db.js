@@ -400,6 +400,49 @@ export async function addFood(food) {
   return { ...row, id };
 }
 
+/** Exact name match — custom foods first so label scans reuse the saved product. */
+export async function findFoodByExactName(name) {
+  const needle = String(name || "").trim().toLowerCase();
+  if (!needle) return null;
+  const all = await listFoods();
+  return (
+    all.find((f) => (f.name || "").toLowerCase() === needle && f.is_custom) ||
+    all.find((f) => (f.name || "").toLowerCase() === needle) ||
+    null
+  );
+}
+
+/**
+ * Persist a review draft (label scan or online voice match) as a reusable custom food.
+ * Stores one-serving macros so later logs can scale servings.
+ */
+export async function ensureCustomFoodFromDraft(d) {
+  const name = String(d?.food_name || d?.name || "").trim();
+  if (!name) return { food: null, created: false };
+  const existing = await findFoodByExactName(name);
+  if (existing) return { food: existing, created: false };
+  const servings = Number(d.servings) > 0 ? Number(d.servings) : 1;
+  const per = (n) => Math.round(((Number(n) || 0) / servings) * 10) / 10;
+  const food = await addFood({
+    name,
+    brand: d.brand || "",
+    serving_size: d.serving_size || "1 serving",
+    calories: per(d.calories),
+    protein: per(d.protein),
+    carbs: per(d.carbs),
+    fat: per(d.fat),
+    fiber: per(d.fiber),
+    sodium_mg: per(d.sodium_mg),
+    sugar_g: per(d.sugar_g),
+    barcode: d.barcode || "",
+    source: d.source === "label" ? "label" : d.source === "nlp" ? "nlp" : "custom",
+    is_custom: true,
+    confidence: d.confidence != null ? Number(d.confidence) : 0.75,
+    verified: Number(d.confidence) >= 0.8,
+  });
+  return { food, created: true };
+}
+
 export async function deleteFood(id) {
   const f = await getFood(id);
   if (!f) throw new Error("Not found");

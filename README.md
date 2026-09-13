@@ -22,6 +22,6 @@ Macro auto-logs exercise burn, then shows a **protein left today** card with **L
 Behind the scenes: free Cloudflare Worker + Workers AI.  
 App owner only: deploy [`worker/photo-estimate`](worker/photo-estimate/README.md) once; keep `DEFAULT_PHOTO_PROXY_URL` in `js/photo-log.js` pointed at it.
 
-Limits: about **5 free photos per day** per device. Barcode / search / voice always work as backup.
+Limits: about **5 free photos per day** per device (camera or library). Scan label uses the same cap and saves the product to Foods. Voice / text also searches Open Food Facts when online. Barcode / search / voice always work as backup.
 
 **Updates** apply automatically when online. Never delete the Home Screen icon to “update” (iPhone can erase diary data).

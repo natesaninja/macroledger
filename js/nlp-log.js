@@ -5,6 +5,7 @@
  * Example: "I had grilled chicken salad with olive oil and 2 eggs"
  */
 import { searchFoods, listFavorites, listRecents } from "./db.js";
+import { searchOpenFoodFacts } from "./food-search.js";
 
 const QTY_RE =
   /(\d+\.?\d*)\s*(cups?|cup|tbsp|tablespoons?|tsp|teaspoons?|oz|ounces?|g|grams?|slices?|piece|pieces|large|medium|small|servings?|bowls?)?/gi;
@@ -88,6 +89,20 @@ function servingsFromQty(qty, unit, food) {
   return qty;
 }
 
+async function searchOnlineSafe(query) {
+  if (!query || !navigator.onLine) return [];
+  try {
+    const p = searchOpenFoodFacts(query, 6);
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), 4000)
+    );
+    const hits = await Promise.race([p, timeout]);
+    return Array.isArray(hits) ? hits : [];
+  } catch {
+    return [];
+  }
+}
+
 async function resolveFood(phrase, preferLists) {
   const norm = normalizePhrase(phrase);
   if (!norm) return null;
@@ -112,18 +127,22 @@ async function resolveFood(phrase, preferLists) {
   }
 
   const results = await searchFoods(query, 8);
-  if (!results.length) {
-    // try first two words
-    const short = query.split(" ").slice(0, 2).join(" ");
-    const r2 = await searchFoods(short, 5);
-    if (r2[0]) return { food: r2[0], confidence: 0.55, via: "search_fuzzy" };
-    return null;
+  if (results.length) {
+    const best =
+      results.find((f) => normalizePhrase(f.name).startsWith(query)) || results[0];
+    const conf = normalizePhrase(best.name).includes(query) ? 0.75 : 0.6;
+    return { food: best, confidence: conf, via: "search" };
   }
-  // prefer starts-with
-  const best =
-    results.find((f) => normalizePhrase(f.name).startsWith(query)) || results[0];
-  const conf = normalizePhrase(best.name).includes(query) ? 0.75 : 0.6;
-  return { food: best, confidence: conf, via: "search" };
+
+  const short = query.split(" ").slice(0, 2).join(" ");
+  const r2 = short !== query ? await searchFoods(short, 5) : [];
+  if (r2[0]) return { food: r2[0], confidence: 0.55, via: "search_fuzzy" };
+
+  const online = await searchOnlineSafe(query);
+  if (online[0]) {
+    return { food: online[0], confidence: 0.7, via: "openfoodfacts" };
+  }
+  return null;
 }
 
 /**
@@ -179,17 +198,29 @@ export async function parseFoodUtterance(text, meal = "lunch") {
       });
       continue;
     }
-    const { food, confidence } = resolved;
+    const { food, confidence, via } = resolved;
     const servings = servingsFromQty(qty, "", food);
-    drafts.push(scaleFoodDraft(food, servings, meal, confidence, "nlp"));
+    drafts.push(scaleFoodDraft(food, servings, meal, confidence, "nlp", via));
   }
 
-  // If nothing matched aliases, fall back to segment search
-  if (!drafts.length) {
-    const segments = extractSegments(text);
+  remaining = remaining.replace(CONNECTORS, " ").replace(/\s+/g, " ").trim();
+
+  // Alias hits plus leftover words ("2 eggs and toast")
+  const leftoverSource = drafts.length ? remaining : text;
+  if (!drafts.length || remaining.length > 2) {
+    const segments = extractSegments(leftoverSource);
     for (const seg of segments) {
       const { qty, unit, rest } = parseQuantity(seg);
       const phrase = rest || seg;
+      const phraseNorm = normalizePhrase(phrase).replace(/\d+/g, " ").replace(/\s+/g, " ").trim();
+      if (!phraseNorm) continue;
+      // Leftover crumbs after aliases ("protein bar" → "bar") are usually noise
+      if (drafts.length && phraseNorm.length < 4) continue;
+      const already = drafts.some((d) => {
+        const n = normalizePhrase(d.food_name).split(" (")[0];
+        return n && (n.includes(phraseNorm) || phraseNorm.includes(n));
+      });
+      if (already) continue;
       const resolved = await resolveFood(phrase, prefer);
       if (!resolved) {
         drafts.push({
@@ -211,18 +242,23 @@ export async function parseFoodUtterance(text, meal = "lunch") {
         continue;
       }
       const servings = servingsFromQty(qty, unit, resolved.food);
-      drafts.push(
-        scaleFoodDraft(resolved.food, servings, meal, resolved.confidence * 0.9, "nlp")
-      );
+      const conf =
+        resolved.via === "openfoodfacts"
+          ? Math.min(0.7, resolved.confidence)
+          : resolved.confidence * 0.9;
+      drafts.push(scaleFoodDraft(resolved.food, servings, meal, conf, "nlp", resolved.via));
     }
   }
 
   return drafts;
 }
 
-function scaleFoodDraft(food, servings, meal, confidence, source) {
+function scaleFoodDraft(food, servings, meal, confidence, source, via = "") {
+  let note = "";
+  if (via === "openfoodfacts") note = "Online match — confirm brand & serving";
+  else if (confidence < 0.8) note = "Text estimate — confirm";
   return {
-    food_id: food.id,
+    food_id: food.id || null,
     food_name: food.name,
     serving_size: food.serving_size,
     servings,
@@ -231,12 +267,16 @@ function scaleFoodDraft(food, servings, meal, confidence, source) {
     carbs: round1(food.carbs * servings),
     fat: round1(food.fat * servings),
     fiber: round1((food.fiber || 0) * servings),
+    sugar_g: round1((food.sugar_g || 0) * servings),
+    sodium_mg: round1((food.sodium_mg || 0) * servings),
+    brand: food.brand || "",
+    barcode: food.barcode || "",
     meal,
     confidence,
     source,
     user_verified: false,
     needs_review: confidence < 0.8,
-    note: confidence < 0.8 ? "AI/text estimate — confirm" : "",
+    note,
   };
 }
 

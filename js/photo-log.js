@@ -167,38 +167,46 @@ function normalizeItems(payload) {
       fiber: round1(it.fiber),
       sugar: round1(it.sugar ?? it.sugar_g ?? it.sugars),
       sodium_mg: round1(it.sodium_mg ?? (it.sodium != null ? Number(it.sodium) : 0)),
+      servings_per_container: Number(it.servings_per_container) || null,
       confidence: Math.min(1, Math.max(0.15, Number(it.confidence) || 0.55)),
     }))
     .filter((it) => it.calories > 0 || it.protein > 0 || it.carbs > 0 || it.fat > 0 || it.name);
 }
 
 function itemsToDrafts(items, meal, source = "photo") {
-  return items.map((it) => ({
-    food_id: null,
-    food_name: it.name,
-    serving_size: it.portion,
-    servings: 1,
-    calories: it.calories,
-    protein: it.protein,
-    carbs: it.carbs,
-    fat: it.fat,
-    fiber: it.fiber,
-    sugar_g: it.sugar != null ? it.sugar : 0,
-    sodium_mg: it.sodium_mg != null ? it.sodium_mg : 0,
-    meal,
-    confidence: it.confidence,
-    source,
-    user_verified: false,
-    needs_review: it.confidence < 0.8,
-    note:
+  return items.map((it) => {
+    let note =
       source === "label"
         ? it.confidence < 0.8
           ? "Label scan — confirm numbers"
           : "From nutrition label"
         : it.confidence < 0.8
           ? "Photo estimate — confirm"
-          : "Photo estimate",
-  }));
+          : "Photo estimate";
+    const per = Number(it.servings_per_container);
+    if (source === "label" && per > 1) {
+      note += ` · ${per} servings/container — set servings if you ate more than 1`;
+    }
+    return {
+      food_id: null,
+      food_name: it.name,
+      serving_size: it.portion,
+      servings: 1,
+      calories: it.calories,
+      protein: it.protein,
+      carbs: it.carbs,
+      fat: it.fat,
+      fiber: it.fiber,
+      sugar_g: it.sugar != null ? it.sugar : 0,
+      sodium_mg: it.sodium_mg != null ? it.sodium_mg : 0,
+      meal,
+      confidence: it.confidence,
+      source,
+      user_verified: false,
+      needs_review: it.confidence < 0.8,
+      note,
+    };
+  });
 }
 
 /**

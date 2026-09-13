@@ -11,6 +11,7 @@ import {
   goalsFromSettings,
   searchFoods,
   addFood,
+  ensureCustomFoodFromDraft,
   deleteFood,
   findByBarcode,
   diaryForDate,
@@ -1569,8 +1570,8 @@ function updatePhotoLogStatus() {
   }
   if (hint) {
     hint.textContent = ready
-      ? `Snap your plate — about ${left} free photo${left === 1 ? "" : "s"} left today. Needs internet.`
-      : "Snap your plate when online — free a few times per day.";
+      ? `${left} photo scan${left === 1 ? "" : "s"} left today · camera or library · label uses the same limit`
+      : "Photo meal needs internet. Camera or library when you’re online.";
   }
 }
 
@@ -1936,7 +1937,8 @@ function renderReviewList() {
           <span>${escapeHtml(d.food_name)} ${low ? '<span class="flag-uncertain">? ' + Math.round(d.confidence * 100) + '%</span>' : ""}</span>
           <button type="button" class="ghost-btn rev-del" data-i="${i}" style="padding:2px 8px">Remove</button>
         </div>
-        <div class="entry-meta">${escapeHtml(d.serving_size || "")} � ${formatNum(d.calories)} cal</div>
+        <div class="entry-meta">${escapeHtml(d.serving_size || "")} · ${formatNum(d.calories)} cal</div>
+        ${d.note ? `<p class="hint" style="margin:0.25rem 0 0">${escapeHtml(d.note)}</p>` : ""}
         ${MacroLedgers(d.protein, d.carbs, d.fat)}
         <label>Servings <input type="number" class="rev-serv" data-i="${i}" min="0.1" step="0.25" value="${d.servings}" /></label>
       </div>`;
@@ -1956,7 +1958,7 @@ function renderReviewList() {
       const s = parseFloat(inp.value) || 1;
       const r = s / old;
       d.servings = s;
-      for (const k of ["calories", "protein", "carbs", "fat", "fiber"]) {
+      for (const k of ["calories", "protein", "carbs", "fat", "fiber", "sugar_g", "sodium_mg"]) {
         d[k] = Math.round((d[k] || 0) * r * 10) / 10;
       }
       renderReviewList();
@@ -2004,41 +2006,76 @@ function setup() {
     };
   }
   const photoInput = el("photo-log-input");
-  if (el("btn-photo-log") && photoInput) {
-    el("btn-photo-log").onclick = async () => {
-      // Check setup BEFORE opening the camera — avoids "photo then dump to Goals"
-      const ready = await ensurePhotoLogReady();
-      if (!ready) return;
-      photoInput.value = "";
-      photoInput.click();
-    };
-    photoInput.onchange = async () => {
-      const file = photoInput.files && photoInput.files[0];
-      photoInput.value = "";
-      if (!file) return;
-      // Re-check in case settings changed or quota hit while camera was open
-      const ready = await ensurePhotoLogReady();
-      if (!ready) return;
-      await runPhotoMealEstimate(file, "meal");
-    };
-  }
+  const photoLibInput = el("photo-library-input");
   const labelInput = el("label-scan-input");
-  if (el("btn-scan-label") && labelInput) {
-    el("btn-scan-label").onclick = async () => {
-      const ready = await ensurePhotoLogReady();
-      if (!ready) return;
-      labelInput.value = "";
-      labelInput.click();
-    };
-    labelInput.onchange = async () => {
-      const file = labelInput.files && labelInput.files[0];
-      labelInput.value = "";
-      if (!file) return;
-      const ready = await ensurePhotoLogReady();
-      if (!ready) return;
-      await runPhotoMealEstimate(file, "label");
+  const labelLibInput = el("label-library-input");
+  const sourceModal = el("photo-source-modal");
+  let photoSourceMode = "meal";
+
+  function closePhotoSource() {
+    if (sourceModal) sourceModal.hidden = true;
+  }
+
+  async function openPhotoSource(mode) {
+    const ready = await ensurePhotoLogReady();
+    if (!ready) return;
+    photoSourceMode = mode === "label" ? "label" : "meal";
+    const title = el("photo-source-title");
+    const hint = el("photo-source-hint");
+    const left = photoScansRemaining(CLIENT_DAILY_LIMIT);
+    if (title) title.textContent = photoSourceMode === "label" ? "Scan label" : "Photo meal";
+    if (hint) {
+      hint.textContent =
+        photoSourceMode === "label"
+          ? `Fill the frame with the Nutrition Facts panel. ${left} scan${left === 1 ? "" : "s"} left today.`
+          : `Whole plate, good light. ${left} scan${left === 1 ? "" : "s"} left today.`;
+    }
+    if (sourceModal) sourceModal.hidden = false;
+  }
+
+  async function onPhotoFile(input, mode) {
+    const file = input?.files && input.files[0];
+    if (input) input.value = "";
+    if (!file) return;
+    const ready = await ensurePhotoLogReady();
+    if (!ready) return;
+    await runPhotoMealEstimate(file, mode);
+  }
+
+  if (el("btn-photo-log")) {
+    el("btn-photo-log").onclick = () => openPhotoSource("meal");
+  }
+  if (el("btn-scan-label")) {
+    el("btn-scan-label").onclick = () => openPhotoSource("label");
+  }
+  if (el("photo-source-close")) el("photo-source-close").onclick = closePhotoSource;
+  if (sourceModal) {
+    sourceModal.addEventListener("click", (e) => {
+      if (e.target.id === "photo-source-modal") closePhotoSource();
+    });
+  }
+  if (el("photo-source-camera")) {
+    el("photo-source-camera").onclick = () => {
+      closePhotoSource();
+      const input = photoSourceMode === "label" ? labelInput : photoInput;
+      if (!input) return toast("Camera isn’t available");
+      input.value = "";
+      input.click();
     };
   }
+  if (el("photo-source-library")) {
+    el("photo-source-library").onclick = () => {
+      closePhotoSource();
+      const input = photoSourceMode === "label" ? labelLibInput : photoLibInput;
+      if (!input) return toast("Photo library isn’t available");
+      input.value = "";
+      input.click();
+    };
+  }
+  if (photoInput) photoInput.onchange = () => onPhotoFile(photoInput, "meal");
+  if (photoLibInput) photoLibInput.onchange = () => onPhotoFile(photoLibInput, "meal");
+  if (labelInput) labelInput.onchange = () => onPhotoFile(labelInput, "label");
+  if (labelLibInput) labelLibInput.onchange = () => onPhotoFile(labelLibInput, "label");
   const addLabelInput = el("add-label-input");
   if (addLabelInput) {
     addLabelInput.onchange = async () => {
@@ -2064,12 +2101,20 @@ function setup() {
   };
   document.getElementById("nlp-parse").onclick = async () => {
     const text = document.getElementById("nlp-text").value;
+    if (!String(text || "").trim()) return toast("Type or speak what you ate");
     const meal = guessMealSlot();
     document.getElementById("review-meal").value = meal;
-    const drafts = await parseFoodUtterance(text, meal);
-    if (!drafts.length) return toast("Could not parse � try simpler phrases");
-    document.getElementById("nlp-modal").hidden = true;
-    openReview(drafts);
+    const btn = document.getElementById("nlp-parse");
+    if (btn) btn.disabled = true;
+    try {
+      toast(navigator.onLine ? "Matching foods…" : "Matching local foods…");
+      const drafts = await parseFoodUtterance(text, meal);
+      if (!drafts.length) return toast("Could not parse — try simpler phrases");
+      document.getElementById("nlp-modal").hidden = true;
+      openReview(drafts);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   };
   document.getElementById("nlp-mic").onclick = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2081,7 +2126,7 @@ function setup() {
     };
     rec.onerror = () => toast("Mic error");
     rec.start();
-    toast("Listening�");
+    toast("Listening…");
   };
   document.getElementById("close-review").onclick = document.getElementById(
     "review-discard"
@@ -2092,8 +2137,24 @@ function setup() {
   async function saveReviewDrafts({ asMeal = false } = {}) {
     const meal = document.getElementById("review-meal").value;
     const portion = getActivePortion();
+    if (!reviewDrafts.length) return toast("Nothing to save");
+    let foodsAdded = 0;
+    for (const d of reviewDrafts) {
+      const saveFood =
+        d.source === "label" ||
+        (d.source === "nlp" && !d.food_id && ((Number(d.calories) || 0) > 0 || (Number(d.protein) || 0) > 0));
+      if (!saveFood) continue;
+      try {
+        const { food, created } = await ensureCustomFoodFromDraft(d);
+        if (food?.id) {
+          if (created) foodsAdded += 1;
+          d.food_id = food.id;
+        }
+      } catch (err) {
+        console.warn("save food from draft failed", err);
+      }
+    }
     const drafts = scaleItemList(reviewDrafts, portion.factor);
-    if (!drafts.length) return toast("Nothing to save");
     for (const d of drafts) {
       await addDiaryEntry({
         ...d,
@@ -2144,22 +2205,25 @@ function setup() {
           servings_default: 1,
         });
         toast(
-          portion.isFull
+          (portion.isFull
             ? `Saved ${drafts.length} items + meal “${name}”`
-            : `Logged your share (${portion.myShare}/${portion.cookedFor}) + meal “${name}”`
+            : `Logged your share (${portion.myShare}/${portion.cookedFor}) + meal “${name}”`) +
+            (foodsAdded ? ` · ${foodsAdded} added to Foods` : "")
         );
       } else {
         toast(
-          portion.isFull
+          (portion.isFull
             ? `Saved ${drafts.length} items`
-            : `Logged your share (${portion.myShare}/${portion.cookedFor})`
+            : `Logged your share (${portion.myShare}/${portion.cookedFor})`) +
+            (foodsAdded ? ` · ${foodsAdded} added to Foods` : "")
         );
       }
     } else {
       toast(
-        portion.isFull
+        (portion.isFull
           ? `Saved ${drafts.length} items`
-          : `Logged your share (${portion.myShare}/${portion.cookedFor}) · ${drafts.length} items`
+          : `Logged your share (${portion.myShare}/${portion.cookedFor}) · ${drafts.length} items`) +
+          (foodsAdded ? ` · ${foodsAdded} added to Foods` : "")
       );
     }
     reviewDrafts = [];
@@ -3002,6 +3066,10 @@ function setupRestaurantBuilder() {
       document.getElementById("view-meals").classList.add("active");
       renderRestaurantBuilder();
       loadMealsView();
+      document.getElementById("restaurant-builder-card")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     };
   }
   renderRestaurantBuilder();
