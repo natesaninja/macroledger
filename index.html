@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=38" />
-  <link rel="icon" href="icons/icon-192.png?v=38" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=38" />
+  <link rel="manifest" href="manifest.webmanifest?v=39" />
+  <link rel="icon" href="icons/icon-192.png?v=39" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=39" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=38" />
+  <link rel="stylesheet" href="css/app.css?v=39" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">Streak 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">v38</span>
+      <span id="app-version" class="app-version">v39</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -118,6 +118,7 @@
             <button type="button" class="chip-btn primary-chip" id="btn-scan-barcode">Barcode</button>
             <button type="button" class="chip-btn primary-chip" id="btn-scan-label">Scan macros</button>
             <button type="button" class="chip-btn primary-chip" id="btn-photo-log">Plate photo</button>
+            <button type="button" class="chip-btn primary-chip" id="btn-scan-recipe">Recipe</button>
           </div>
           <p class="hint photo-log-hint" id="photo-log-hint" style="margin:0.15rem 0 0.35rem">
             Barcode looks online. No match? Photograph the Nutrition Facts panel.
@@ -138,6 +139,8 @@
           <input type="file" id="photo-library-input" accept="image/*" hidden />
           <input type="file" id="label-scan-input" accept="image/*" capture="environment" hidden />
           <input type="file" id="label-library-input" accept="image/*" hidden />
+          <input type="file" id="recipe-scan-input" accept="image/*" capture="environment" hidden />
+          <input type="file" id="recipe-library-input" accept="image/*" hidden />
           <div class="quick-rail" id="quick-rail"></div>
         </div>
 
@@ -386,7 +389,13 @@
 
         <div class="card">
           <h3 class="card-title">Recipe builder</h3>
-          <p class="hint" style="margin-top:0">Add ingredients → auto nutrition → save as a one-tap meal.</p>
+          <p class="hint" style="margin-top:0">
+            Scan a card, paste an ingredient list, or add foods by hand. We fill macros and split by servings.
+          </p>
+          <div class="form-actions" style="margin:0 0 0.75rem">
+            <button type="button" class="primary-btn" id="btn-scan-recipe-meals">Scan recipe</button>
+            <button type="button" class="ghost-btn" id="btn-paste-recipe-meals">Paste recipe</button>
+          </div>
           <form id="recipe-form" class="form-grid">
             <label class="span-2">Recipe name *<input name="name" id="recipe-name" required placeholder="e.g. Protein bowl" /></label>
             <label class="span-2">Search ingredient
@@ -644,6 +653,19 @@
         </div>
 
         <div class="card info-card">
+          <h3 class="card-title">Scan a recipe</h3>
+          <p class="hint" style="margin-top:0">
+            Diary → <strong>Recipe</strong>, or Meals → Scan recipe. Photo a card / screenshot, or paste the ingredient list.
+          </p>
+          <ol class="info-steps">
+            <li>We list each ingredient with an amount and estimated macros for the <strong>full batch</strong>.</li>
+            <li><strong>Cooked for</strong> = servings the recipe makes. <strong>I ate</strong> = your plate (often 1).</li>
+            <li>Save logs your share. <strong>Log my share + save recipe</strong> stores one serving for next time.</li>
+          </ol>
+          <p class="hint">Estimates — confirm amounts, especially oils and meats. Uses the same free photo limit as plate photos when you snap a card.</p>
+        </div>
+
+        <div class="card info-card">
           <h3 class="card-title">Fastest way to log</h3>
           <p class="hint" style="margin-top:0">
             Open the app — the bottom bar is always there on Diary. You don’t have to scroll.
@@ -898,6 +920,12 @@
       </div>
       <div class="modal-body">
         <p class="hint" style="margin-top:0">⚠ Uncertain items are flagged. Edit servings or remove before saving.</p>
+        <div id="review-recipe-meta" hidden>
+          <label>Recipe name
+            <input type="text" id="review-recipe-name" placeholder="e.g. Chicken rice bowl" />
+          </label>
+          <p class="hint" id="review-recipe-yield" style="margin:0.35rem 0 0.6rem"></p>
+        </div>
         <label>Meal
           <select id="review-meal">
             <option value="breakfast">Breakfast</option>
@@ -982,6 +1010,31 @@
     </div>
   </div>
 
+  <!-- Scan / paste recipe -->
+  <div class="modal-backdrop" id="recipe-source-modal" hidden>
+    <div class="modal modal-sm" role="dialog" aria-labelledby="recipe-source-title">
+      <div class="modal-header">
+        <h2 id="recipe-source-title">Scan recipe</h2>
+        <button type="button" class="icon-btn" id="recipe-source-close" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0">
+          Photograph the ingredient list, pick a screenshot, or paste the recipe. We’ll estimate macros for the whole batch, then you log your portion.
+        </p>
+        <div class="photo-source-actions">
+          <button type="button" class="primary-btn full" id="recipe-source-camera">Take photo</button>
+          <button type="button" class="ghost-btn full" id="recipe-source-library">Choose from photos</button>
+        </div>
+        <label style="display:block;margin-top:0.85rem">Paste ingredients
+          <textarea id="recipe-paste-text" rows="6" placeholder="Chicken rice bowl&#10;Serves 4&#10;1 lb chicken breast&#10;2 cups cooked rice&#10;1 tbsp olive oil"></textarea>
+        </label>
+        <div class="form-actions" style="margin-top:0.6rem">
+          <button type="button" class="primary-btn full" id="recipe-source-paste">Parse pasted recipe</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Camera vs library picker -->
   <div class="modal-backdrop" id="photo-source-modal" hidden>
     <div class="modal modal-sm" role="dialog" aria-labelledby="photo-source-title">
@@ -1029,6 +1082,6 @@
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=38"></script>
+  <script type="module" src="js/app.js?v=39"></script>
 </body>
 </html>

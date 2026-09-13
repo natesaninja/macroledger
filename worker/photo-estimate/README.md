@@ -4,8 +4,8 @@ Shared free photo → calories/macros for the app. **End users need no setup, no
 
 ## How it works
 
-1. App sends a compressed plate photo to this Worker
-2. Worker uses **Cloudflare Workers AI** (built-in) to estimate foods & macros
+1. App sends a compressed plate photo, nutrition-label photo, or **recipe** photo/text
+2. Worker uses **Cloudflare Workers AI** (built-in) to estimate foods & macros (`mode`: `meal` | `label` | `recipe`)
 3. Optional: set `GEMINI_API_KEY` secret as a fallback model
 4. Limits: **5 scans per IP / day**, **400 global / day** (defaults)
 

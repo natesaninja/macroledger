@@ -22,7 +22,9 @@ Macro auto-logs exercise burn, then shows a **protein left today** card with **L
 Behind the scenes: free Cloudflare Worker + Workers AI.  
 App owner only: deploy [`worker/photo-estimate`](worker/photo-estimate/README.md) once; keep `DEFAULT_PHOTO_PROXY_URL` in `js/photo-log.js` pointed at it.
 
-**Fastest log:** bottom bar **Search · Barcode · Macros**. Barcode looks up Open Food Facts (UPC and EAN). If the code isn’t in that library, tap **Scan macros on package** — photograph the Nutrition Facts panel and we save it (with the barcode) for next time.
+**Fastest log:** bottom bar **Search · Barcode · Macros**. Diary also has **Recipe** — photo a card or paste ingredients; we estimate the batch and you log your share.
+
+Barcode looks up Open Food Facts (UPC and EAN). If the code isn’t in that library, tap **Scan macros on package** — photograph the Nutrition Facts panel and we save it (with the barcode) for next time.
 
 Limits: about **5 free photos per day** per device (plate or label). Voice / text also searches Open Food Facts when online.
 

@@ -63,8 +63,43 @@ Rules:
 - confidence 0-1. If not a nutrition label: {"items":[],"notes":"No nutrition facts label detected"}.
 - One product only — not a multi-item plate.`;
 
+const RECIPE_PROMPT = `You are reading a RECIPE (card, cookbook page, screenshot, or pasted text).
+Extract the ingredient list with amounts and estimate nutrition for the FULL BATCH (all servings combined).
+Return JSON only (no markdown):
+{
+  "name": "short recipe name",
+  "servings": 4,
+  "items": [
+    {
+      "name": "ingredient name",
+      "portion": "amount as written e.g. 2 cups or 1 lb",
+      "calories": 0,
+      "protein": 0,
+      "carbs": 0,
+      "fat": 0,
+      "fiber": 0,
+      "confidence": 0.0
+    }
+  ],
+  "notes": "optional"
+}
+Rules:
+- servings = how many portions the recipe makes (default 4 if unstated).
+- Each item is one ingredient; calories/macros are for that ingredient's amount in the full recipe (not per serving, not per 100g).
+- Skip directions, spices under 1g, water, salt/pepper unless they add meaningful calories.
+- confidence 0-1. If this is not a recipe: {"name":"","servings":1,"items":[],"notes":"No recipe detected"}.`;
+
 function promptForMode(mode) {
-  return mode === "label" ? LABEL_PROMPT : PROMPT;
+  if (mode === "label") return LABEL_PROMPT;
+  if (mode === "recipe") return RECIPE_PROMPT;
+  return PROMPT;
+}
+
+function normalizeMode(mode) {
+  const m = String(mode || "").toLowerCase();
+  if (m === "label") return "label";
+  if (m === "recipe") return "recipe";
+  return "meal";
 }
 
 function corsHeaders(origin) {
@@ -206,7 +241,7 @@ async function callWorkersAI(env, imageBase64, mode = "meal") {
     const result = await env.AI.run(model, {
       image,
       prompt: promptForMode(mode),
-      max_tokens: 1200,
+      max_tokens: mode === "recipe" ? 1800 : 1200,
       temperature: 0.15,
     });
 
@@ -328,6 +363,47 @@ async function callGemini(env, imageBase64, mimeType, mode = "meal") {
   }
 }
 
+async function callGeminiText(env, recipeText) {
+  const key = env.GEMINI_API_KEY;
+  if (!key) {
+    return { ok: false, status: 501, body: { error: "Text recipe parse needs the photo AI fallback.", code: "config" } };
+  }
+  const model = env.GEMINI_MODEL || env.MODEL || DEFAULT_GEMINI_MODEL;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [{ text: `${RECIPE_PROMPT}\n\nRecipe:\n${String(recipeText).slice(0, 8000)}` }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.15,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      status: res.status === 429 ? 429 : 502,
+      body: { error: "Could not parse that recipe text. Try a photo, or paste fewer ingredients.", code: "gemini_error" },
+    };
+  }
+  const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
+  if (!text) {
+    return { ok: false, status: 502, body: { error: "Empty recipe parse.", code: "empty" } };
+  }
+  try {
+    return { ok: true, parsed: parseNutritionJson(text), via: "gemini_text" };
+  } catch {
+    return { ok: false, status: 502, body: { error: "Could not understand the recipe. Try a photo of the ingredient list.", code: "parse" } };
+  }
+}
+
 async function estimate(env, imageBase64, mimeType, mode = "meal") {
   // Prefer Workers AI (zero setup for app users)
   if (env.AI) {
@@ -388,7 +464,32 @@ export default {
 
     const imageBase64 = body.imageBase64 || body.base64 || "";
     const mimeType = body.mimeType || body.mime_type || "image/jpeg";
-    const mode = body.mode === "label" ? "label" : "meal";
+    const mode = normalizeMode(body.mode);
+    const recipeText = String(body.text || body.recipeText || "").trim();
+
+    let result;
+    if (mode === "recipe" && recipeText.length >= 12 && (!imageBase64 || imageBase64.length < 100)) {
+      const limits = await checkAndBumpLimits(env, request);
+      if (!limits.ok) return json(limits.body, limits.status, origin);
+      result = await callGeminiText(env, recipeText);
+      if (!result.ok) return json(result.body, result.status, origin);
+      const items = Array.isArray(result.parsed?.items) ? result.parsed.items : [];
+      return json(
+        {
+          items,
+          name: result.parsed?.name || "",
+          servings: Number(result.parsed?.servings) || 1,
+          notes: result.parsed?.notes || "",
+          remaining: limits.remaining,
+          free: true,
+          via: result.via || "unknown",
+          mode,
+        },
+        200,
+        origin
+      );
+    }
+
     if (!imageBase64 || imageBase64.length < 100) {
       return json({ error: "No photo received. Try taking the picture again." }, 400, origin);
     }
@@ -399,13 +500,15 @@ export default {
     const limits = await checkAndBumpLimits(env, request);
     if (!limits.ok) return json(limits.body, limits.status, origin);
 
-    const result = await estimate(env, imageBase64, mimeType, mode);
+    result = await estimate(env, imageBase64, mimeType, mode);
     if (!result.ok) return json(result.body, result.status, origin);
 
     const items = Array.isArray(result.parsed?.items) ? result.parsed.items : [];
     return json(
       {
         items,
+        name: result.parsed?.name || "",
+        servings: Number(result.parsed?.servings) || 1,
         notes: result.parsed?.notes || "",
         remaining: limits.remaining,
         free: true,

@@ -2343,6 +2343,18 @@ body {
   flex-direction: column;
   gap: 0.4rem;
 }
+
+#recipe-paste-text {
+  width: 100%;
+  margin-top: 0.35rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 0.6rem;
+  font: inherit;
+  min-height: 8rem;
+}
 /* Larger tap targets on touch */
 @media (pointer: coarse) {
   .nav-tab { min-height: 44px; }

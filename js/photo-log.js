@@ -65,6 +65,39 @@ Rules:
 - If not a nutrition label, return {"items":[],"notes":"No nutrition facts label detected"}.
 - Do not invent a multi-item plate meal — one product only.`;
 
+const RECIPE_PROMPT = `You are reading a RECIPE (card, cookbook page, screenshot, or pasted text).
+Extract the ingredient list with amounts and estimate nutrition for the FULL BATCH (all servings combined).
+Return JSON only (no markdown):
+{
+  "name": "short recipe name",
+  "servings": 4,
+  "items": [
+    {
+      "name": "ingredient name",
+      "portion": "amount as written e.g. 2 cups or 1 lb",
+      "calories": 0,
+      "protein": 0,
+      "carbs": 0,
+      "fat": 0,
+      "fiber": 0,
+      "confidence": 0.0
+    }
+  ],
+  "notes": "optional"
+}
+Rules:
+- servings = how many portions the recipe makes (default 4 if unstated).
+- Each item is one ingredient; calories/macros are for that ingredient's amount in the full recipe.
+- Skip directions, water, salt/pepper unless they add calories.
+- If this is not a recipe: {"name":"","servings":1,"items":[],"notes":"No recipe detected"}.`;
+
+function normalizeMode(mode) {
+  const m = String(mode || "").toLowerCase();
+  if (m === "label") return "label";
+  if (m === "recipe") return "recipe";
+  return "meal";
+}
+
 function todayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -180,9 +213,11 @@ function itemsToDrafts(items, meal, source = "photo") {
         ? it.confidence < 0.8
           ? "Label scan — confirm numbers"
           : "From nutrition label"
-        : it.confidence < 0.8
-          ? "Photo estimate — confirm"
-          : "Photo estimate";
+        : source === "recipe"
+          ? "Recipe ingredient — confirm amount"
+          : it.confidence < 0.8
+            ? "Photo estimate — confirm"
+            : "Photo estimate";
     const per = Number(it.servings_per_container);
     if (source === "label" && per > 1) {
       note += ` · ${per} servings/container — set servings if you ate more than 1`;
@@ -212,7 +247,7 @@ function itemsToDrafts(items, meal, source = "photo") {
 /**
  * @param {File|Blob} file
  * @param {string} meal
- * @param {{ proxyUrl?: string, geminiKey?: string, dailyLimit?: number, mode?: 'meal'|'label' }} config
+ * @param {{ proxyUrl?: string, geminiKey?: string, dailyLimit?: number, mode?: 'meal'|'label'|'recipe' }} config
  */
 export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
   if (!file) throw new PhotoLogError("No photo selected", "no_file");
@@ -223,7 +258,7 @@ export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
     );
   }
 
-  const mode = config.mode === "label" ? "label" : "meal";
+  const mode = normalizeMode(config.mode);
   const limit = config.dailyLimit ?? CLIENT_DAILY_LIMIT;
   const remaining = photoScansRemaining(limit);
   if (remaining <= 0) {
@@ -242,9 +277,10 @@ export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
     );
   }
 
+  const hiRes = mode === "label" || mode === "recipe";
   const compressed = await compressFoodImage(file, {
-    maxEdge: mode === "label" ? 1600 : 1280,
-    quality: mode === "label" ? 0.85 : 0.72,
+    maxEdge: hiRes ? 1600 : 1280,
+    quality: hiRes ? 0.85 : 0.72,
   });
   let payload;
 
@@ -265,16 +301,21 @@ export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
       payload?.notes ||
         (mode === "label"
           ? "No nutrition facts label detected. Fill the frame with the label, better light."
-          : "No food detected in the photo. Try a clearer top-down shot."),
+          : mode === "recipe"
+            ? "No ingredients found. Photograph the ingredient list, or paste the recipe."
+            : "No food detected in the photo. Try a clearer top-down shot."),
       "empty"
     );
   }
 
   bumpPhotoUsage();
+  const source = mode === "label" ? "label" : mode === "recipe" ? "recipe" : "photo";
   return {
-    drafts: itemsToDrafts(items, meal, mode === "label" ? "label" : "photo"),
+    drafts: itemsToDrafts(items, meal, source),
     remaining: photoScansRemaining(limit),
     notes: payload?.notes || "",
+    name: String(payload?.name || "").trim(),
+    servings: Math.max(1, Number(payload?.servings) || 1),
     mode,
   };
 }
@@ -282,6 +323,49 @@ export async function estimateMealFromPhoto(file, meal = "lunch", config = {}) {
 /** Convenience: scan a Nutrition Facts panel → one food draft. */
 export async function estimateLabelFromPhoto(file, meal = "snacks", config = {}) {
   return estimateMealFromPhoto(file, meal, { ...config, mode: "label" });
+}
+
+export async function estimateRecipeFromPhoto(file, meal = "dinner", config = {}) {
+  return estimateMealFromPhoto(file, meal, { ...config, mode: "recipe" });
+}
+
+/** Paste a recipe (no photo). Uses the proxy when it supports text; otherwise the caller should fall back to local parse. */
+export async function estimateRecipeFromText(text, meal = "dinner", config = {}) {
+  const recipeText = String(text || "").trim();
+  if (recipeText.length < 12) {
+    throw new PhotoLogError("Paste the ingredient list (at least a few lines).", "no_file");
+  }
+  const proxyUrl = (config.proxyUrl || DEFAULT_PHOTO_PROXY_URL || "").trim().replace(/\/$/, "");
+  if (!proxyUrl || !navigator.onLine) {
+    throw new PhotoLogError("offline_or_no_proxy", "offline");
+  }
+  const endpoint = proxyUrl.endsWith("/estimate") ? proxyUrl : `${proxyUrl}/estimate`;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ text: recipeText.slice(0, 8000), mode: "recipe" }),
+  });
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  if (!res.ok) {
+    throw new PhotoLogError(body?.error || `Recipe parse failed (${res.status})`, "api_error");
+  }
+  const items = normalizeItems(body);
+  if (!items.length) {
+    throw new PhotoLogError(body?.notes || "No ingredients found in that text.", "empty");
+  }
+  return {
+    drafts: itemsToDrafts(items, meal, "recipe"),
+    remaining: photoScansRemaining(config.dailyLimit ?? CLIENT_DAILY_LIMIT),
+    notes: body?.notes || "",
+    name: String(body?.name || "").trim(),
+    servings: Math.max(1, Number(body?.servings) || 1),
+    mode: "recipe",
+  };
 }
 
 async function callProxy(proxyUrl, compressed, mode = "meal") {
@@ -322,7 +406,8 @@ async function callProxy(proxyUrl, compressed, mode = "meal") {
 async function callGeminiDirect(apiKey, compressed, mode = "meal") {
   const model = "gemini-2.5-flash-lite";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const prompt = mode === "label" ? LABEL_PROMPT : ESTIMATE_PROMPT;
+  const prompt =
+    mode === "label" ? LABEL_PROMPT : mode === "recipe" ? RECIPE_PROMPT : ESTIMATE_PROMPT;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -375,4 +460,4 @@ export class PhotoLogError extends Error {
 }
 
 /** Exported for Worker reuse / tests */
-export { ESTIMATE_PROMPT, LABEL_PROMPT };
+export { ESTIMATE_PROMPT, LABEL_PROMPT, RECIPE_PROMPT };

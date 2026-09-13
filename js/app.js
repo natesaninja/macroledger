@@ -58,10 +58,12 @@ import {
   completeOnboarding,
   ensurePersonalizedCalorieGoal,
 } from "./onboarding.js";
-import { parseFoodUtterance } from "./nlp-log.js";
+import { parseFoodUtterance, parseRecipeText } from "./nlp-log.js";
 import {
   estimateMealFromPhoto,
   estimateLabelFromPhoto,
+  estimateRecipeFromPhoto,
+  estimateRecipeFromText,
   photoScansRemaining,
   isPhotoLogConfigured,
   DEFAULT_PHOTO_PROXY_URL,
@@ -226,6 +228,7 @@ let scanBusy = false;
 let fastingTimerId = null;
 let rbState = { builderId: "chipotle", formatId: null, selected: {} };
 let reviewDrafts = [];
+let reviewMeta = { kind: "", name: "", servings: 1 };
 let onboardStep = 0;
 let onboardDraft = {
   user_name: "You",
@@ -1865,7 +1868,11 @@ async function runPhotoMealEstimate(file, mode = "meal") {
   const busyTitle = document.getElementById("photo-busy-title");
   if (busyTitle) {
     busyTitle.textContent =
-      mode === "label" ? "Reading nutrition label…" : "Estimating meal…";
+      mode === "label"
+        ? "Reading nutrition label…"
+        : mode === "recipe"
+          ? "Reading recipe…"
+          : "Estimating meal…";
   }
   if (busy) busy.hidden = false;
   try {
@@ -1884,25 +1891,34 @@ async function runPhotoMealEstimate(file, mode = "meal") {
       proxyUrl: settings.photo_proxy_url || undefined,
       geminiKey: settings.photo_gemini_key || "",
       dailyLimit: CLIENT_DAILY_LIMIT,
-      mode: mode === "label" ? "label" : "meal",
+      mode: mode === "label" ? "label" : mode === "recipe" ? "recipe" : "meal",
     };
     const result =
       mode === "label"
         ? await estimateLabelFromPhoto(file, meal, cfg)
-        : await estimateMealFromPhoto(file, meal, cfg);
+        : mode === "recipe"
+          ? await estimateRecipeFromPhoto(file, meal, cfg)
+          : await estimateMealFromPhoto(file, meal, cfg);
     if (mode === "label" && pendingBarcode) {
       for (const d of result.drafts) d.barcode = pendingBarcode;
     }
-    openReview(result.drafts);
+    openReview(
+      result.drafts,
+      mode === "recipe"
+        ? { kind: "recipe", name: result.name || "Recipe", servings: result.servings || 1 }
+        : {}
+    );
     updatePhotoLogStatus();
     toast(
       mode === "label"
         ? result.remaining != null
           ? `Label read — check numbers · ${result.remaining} photos left today`
           : "Label read — check numbers & save"
-        : result.remaining != null
-          ? `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save · ${result.remaining} photos left today`
-          : `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save`
+        : mode === "recipe"
+          ? `Recipe: ${result.drafts.length} ingredients · ${result.servings || 1} servings — check amounts`
+          : result.remaining != null
+            ? `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save · ${result.remaining} photos left today`
+            : `Found ${result.drafts.length} food${result.drafts.length === 1 ? "" : "s"} — check & save`
     );
   } catch (err) {
     console.warn("photo log failed", err);
@@ -1911,7 +1927,9 @@ async function runPhotoMealEstimate(file, mode = "meal") {
         ? err.message
         : mode === "label"
           ? "Couldn’t read that label. Try better light or barcode."
-          : "Couldn’t estimate that photo. Try again or use barcode / voice.";
+          : mode === "recipe"
+            ? "Couldn’t read that recipe. Paste the ingredient list instead."
+            : "Couldn’t estimate that photo. Try again or use barcode / voice.";
     toast(msg);
   } finally {
     if (busy) busy.hidden = true;
@@ -1919,10 +1937,78 @@ async function runPhotoMealEstimate(file, mode = "meal") {
   }
 }
 
+async function runRecipeFromText(text) {
+  const recipeText = String(text || "").trim();
+  if (recipeText.length < 12) return toast("Paste the ingredient list (one item per line).");
+  if (photoBusy) return;
+  photoBusy = true;
+  const busy = document.getElementById("photo-busy-modal");
+  const busyTitle = document.getElementById("photo-busy-title");
+  if (busyTitle) busyTitle.textContent = "Reading recipe…";
+  if (busy) busy.hidden = false;
+  try {
+    if (!settings) settings = await getSettings();
+    const meal = guessMealSlot();
+    document.getElementById("review-meal").value = meal;
+    let result = null;
+    try {
+      result = await estimateRecipeFromText(recipeText, meal, {
+        proxyUrl: settings?.photo_proxy_url || undefined,
+        geminiKey: settings?.photo_gemini_key || "",
+      });
+    } catch {
+      result = await parseRecipeText(recipeText, meal);
+    }
+    const drafts = result?.drafts || [];
+    if (!drafts.length) return toast("No ingredients found — try amounts like “1 cup rice”.");
+    openReview(drafts, {
+      kind: "recipe",
+      name: result.name || "Recipe",
+      servings: result.servings || 1,
+    });
+    toast(`Recipe: ${drafts.length} ingredients · ${result.servings || 1} servings — check amounts`);
+  } catch (err) {
+    console.warn("recipe text failed", err);
+    toast(err?.message || "Couldn’t parse that recipe");
+  } finally {
+    if (busy) busy.hidden = true;
+    photoBusy = false;
+  }
+}
+
 // ---- Review drafts (NLP / AI) ----
-function openReview(drafts) {
+function openReview(drafts, meta = {}) {
   reviewDrafts = drafts.map((d) => ({ ...d }));
+  reviewMeta = {
+    kind: meta.kind || "",
+    name: meta.name || "",
+    servings: Math.max(1, Number(meta.servings) || 1),
+  };
   resetPortionFields("review");
+  const recWrap = document.getElementById("review-recipe-meta");
+  if (recWrap) recWrap.hidden = reviewMeta.kind !== "recipe";
+  const nameInp = document.getElementById("review-recipe-name");
+  if (nameInp) nameInp.value = reviewMeta.name || "";
+  const title = document.getElementById("review-title");
+  if (title) title.textContent = reviewMeta.kind === "recipe" ? "Review recipe" : "Review before save";
+  const saveMealBtn = document.getElementById("review-save-meal");
+  if (saveMealBtn) {
+    saveMealBtn.textContent =
+      reviewMeta.kind === "recipe" ? "Log my share + save recipe" : "Save all + meal";
+  }
+  const yieldHint = document.getElementById("review-recipe-yield");
+  if (yieldHint && reviewMeta.kind === "recipe") {
+    yieldHint.textContent = `This batch makes ${reviewMeta.servings} serving${
+      reviewMeta.servings === 1 ? "" : "s"
+    }. Set “Cooked for” to that, and “I ate” to what you had.`;
+  }
+  if (reviewMeta.kind === "recipe") {
+    const cooked = document.getElementById("portion-cooked-review");
+    const mine = document.getElementById("portion-mine-review");
+    if (cooked) cooked.value = reviewMeta.servings;
+    if (mine) mine.value = 1;
+    cooked?.dispatchEvent(new Event("input"));
+  }
   document.getElementById("review-modal").hidden = false;
   renderReviewList();
 }
@@ -2016,6 +2102,7 @@ function consumeLogHash() {
   else if (h === "barcode" || h === "scan") openBarcodeLog();
   else if (h === "label" || h === "macros") openMacrosCamera();
   else if (h === "photo" || h === "plate") document.getElementById("btn-photo-log")?.click();
+  else if (h === "recipe") document.getElementById("btn-scan-recipe")?.click();
 }
 
 function setup() {
@@ -2174,6 +2261,59 @@ function setup() {
   if (photoLibInput) photoLibInput.onchange = () => onPhotoFile(photoLibInput, "meal");
   if (labelInput) labelInput.onchange = () => onPhotoFile(labelInput, "label");
   if (labelLibInput) labelLibInput.onchange = () => onPhotoFile(labelLibInput, "label");
+
+  const recipeModal = el("recipe-source-modal");
+  const recipeCam = el("recipe-scan-input");
+  const recipeLib = el("recipe-library-input");
+  function closeRecipeSource() {
+    if (recipeModal) recipeModal.hidden = true;
+  }
+  function openRecipeSource() {
+    if (recipeModal) recipeModal.hidden = false;
+  }
+  if (el("btn-scan-recipe")) el("btn-scan-recipe").onclick = openRecipeSource;
+  if (el("btn-scan-recipe-meals")) el("btn-scan-recipe-meals").onclick = openRecipeSource;
+  if (el("btn-paste-recipe-meals")) {
+    el("btn-paste-recipe-meals").onclick = () => {
+      openRecipeSource();
+      setTimeout(() => el("recipe-paste-text")?.focus(), 80);
+    };
+  }
+  if (el("recipe-source-close")) el("recipe-source-close").onclick = closeRecipeSource;
+  if (recipeModal) {
+    recipeModal.addEventListener("click", (e) => {
+      if (e.target.id === "recipe-source-modal") closeRecipeSource();
+    });
+  }
+  if (el("recipe-source-camera")) {
+    el("recipe-source-camera").onclick = async () => {
+      const ready = await ensurePhotoLogReady();
+      if (!ready) return;
+      closeRecipeSource();
+      if (!recipeCam) return toast("Camera isn’t available");
+      recipeCam.value = "";
+      recipeCam.click();
+    };
+  }
+  if (el("recipe-source-library")) {
+    el("recipe-source-library").onclick = async () => {
+      const ready = await ensurePhotoLogReady();
+      if (!ready) return;
+      closeRecipeSource();
+      if (!recipeLib) return toast("Photo library isn’t available");
+      recipeLib.value = "";
+      recipeLib.click();
+    };
+  }
+  if (recipeCam) recipeCam.onchange = () => onPhotoFile(recipeCam, "recipe");
+  if (recipeLib) recipeLib.onchange = () => onPhotoFile(recipeLib, "recipe");
+  if (el("recipe-source-paste")) {
+    el("recipe-source-paste").onclick = async () => {
+      const text = el("recipe-paste-text")?.value || "";
+      closeRecipeSource();
+      await runRecipeFromText(text);
+    };
+  }
   const addLabelInput = el("add-label-input");
   if (addLabelInput) {
     addLabelInput.onchange = async () => {
@@ -2267,12 +2407,23 @@ function setup() {
       });
     }
     if (asMeal) {
-      const defaultName = `Meal ${formatDateLabel(currentDate)}`;
-      const name = (prompt("Name this meal for one-tap later:", defaultName) || "").trim();
+      const typedName = document.getElementById("review-recipe-name")?.value?.trim();
+      const defaultName =
+        reviewMeta.kind === "recipe"
+          ? typedName || reviewMeta.name || "Recipe"
+          : `Meal ${formatDateLabel(currentDate)}`;
+      const name =
+        reviewMeta.kind === "recipe"
+          ? defaultName
+          : (prompt("Name this meal for one-tap later:", defaultName) || "").trim();
       if (name) {
-        // Store *full pot* macros so re-logging can re-apply share later if desired;
-        // items already scaled to "my share" for the diary — save same share for one-tap match.
-        const items = drafts.map((d) => ({
+        // Recipes: store ONE serving so Quick log → Meals logs a single plate.
+        // Other saves: store the share that was just logged.
+        const storeItems =
+          reviewMeta.kind === "recipe" && portion.cookedFor > 0
+            ? scaleItemList(reviewDrafts, 1 / portion.cookedFor)
+            : drafts;
+        const items = storeItems.map((d) => ({
           food_id: d.food_id || null,
           food_name: d.food_name,
           serving_size: d.serving_size,
@@ -2299,7 +2450,7 @@ function setup() {
           meal_type: meal,
           items,
           totals,
-          is_recipe: false,
+          is_recipe: reviewMeta.kind === "recipe",
           servings_default: 1,
         });
         toast(

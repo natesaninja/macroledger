@@ -8,7 +8,7 @@ import { searchFoods, listFavorites, listRecents } from "./db.js";
 import { searchOpenFoodFacts } from "./food-search.js";
 
 const QTY_RE =
-  /(\d+\.?\d*)\s*(cups?|cup|tbsp|tablespoons?|tsp|teaspoons?|oz|ounces?|g|grams?|slices?|piece|pieces|large|medium|small|servings?|bowls?)?/gi;
+  /(\d+\.?\d*)\s*(cups?|cup|tbsp|tablespoons?|tsp|teaspoons?|oz|ounces?|g|grams?|lb|lbs|pounds?|kg|ml|slices?|piece|pieces|cloves?|cans?|large|medium|small|servings?|bowls?)?/gi;
 
 const CONNECTORS = /\b(and|with|plus|also|then|had|ate|i|a|an|the|some|of|for|my|today|breakfast|lunch|dinner|snack)\b/gi;
 
@@ -86,7 +86,126 @@ function servingsFromQty(qty, unit, food) {
     return qty / 4;
   }
   if (/slice|piece/.test(unit)) return qty;
+  if (/lb|pound/.test(unit)) {
+    const sm = (food.serving_size || "").match(/([\d.]+)\s*oz/i);
+    if (sm) return (qty * 16) / parseFloat(sm[1]);
+    return qty * 4;
+  }
+  if (/^g|grams?/.test(unit)) {
+    const sm = (food.serving_size || "").match(/([\d.]+)\s*g/i);
+    if (sm) return qty / parseFloat(sm[1]);
+    return qty / 100;
+  }
   return qty;
+}
+
+function normalizeRecipeLine(s) {
+  return String(s || "")
+    .replace(/½/g, " 0.5 ")
+    .replace(/¼/g, " 0.25 ")
+    .replace(/¾/g, " 0.75 ")
+    .replace(/⅓/g, " 0.33 ")
+    .replace(/⅔/g, " 0.67 ")
+    .replace(/(\d+)\s+(\d+)\s*\/\s*(\d+)/g, (_, w, n, d) =>
+      String(Number(w) + Number(n) / Number(d))
+    )
+    .replace(/(\d+)\s*\/\s*(\d+)/g, (_, n, d) => String(Number(n) / Number(d)))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Paste a recipe ingredient list → review drafts + yield.
+ * Uses local foods then Open Food Facts. No photo quota.
+ */
+export async function parseRecipeText(text, meal = "dinner") {
+  const raw = String(text || "").replace(/\r/g, "");
+  if (!raw.trim()) return { drafts: [], name: "", servings: 1 };
+
+  let servings = 1;
+  const sm = raw.match(/\b(?:serves?|servings?|makes|yield(?:s)?)\s*(?:about\s*)?(\d+(?:\.\d+)?)/i);
+  if (sm) servings = Math.max(1, Number(sm[1]) || 1);
+
+  const favs = await listFavorites();
+  const recents = await listRecents(20);
+  const prefer = [favs, recents];
+
+  const drafts = [];
+  let name = "";
+  const lines = raw.split(/\n+/).map((l) =>
+    l
+      .replace(/^[\s•\-*\u2022]+/, "")
+      .replace(/^\d+[.)]\s+/, "")
+      .trim()
+  );
+
+  for (const orig of lines) {
+    if (!orig) continue;
+    const line = normalizeRecipeLine(orig);
+    const lower = line.toLowerCase();
+    if (
+      /^(ingredients|directions|instructions|method|steps|notes|nutrition|preparation)\b/.test(
+        lower
+      )
+    ) {
+      continue;
+    }
+    if (
+      /\b(preheat|bake|cook|minutes?|degrees?|fahrenheit|celsius|oven)\b/.test(lower) &&
+      !/\d+\s*(cup|tbsp|tsp|oz|g|lb|ml)\b/i.test(line)
+    ) {
+      continue;
+    }
+    if (
+      /\b(serves?|servings?|makes|yield)\b/.test(lower) &&
+      !/\d+\s*(cup|tbsp|tsp|oz|g|lb)\b/i.test(line)
+    ) {
+      continue;
+    }
+    if (!name && drafts.length === 0 && line.length < 70 && !/\d/.test(line)) {
+      name = orig.trim();
+      continue;
+    }
+    const { qty, unit, rest } = parseQuantity(line);
+    const phrase = rest || line;
+    const phraseNorm = normalizePhrase(phrase);
+    if (!phraseNorm || phraseNorm.length < 3) continue;
+    const resolved = await resolveFood(phrase, prefer);
+    const portion = [qty, unit].filter(Boolean).join(" ") || "1 serving";
+    if (!resolved) {
+      drafts.push({
+        food_name: phrase,
+        serving_size: portion,
+        servings: qty || 1,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fiber: 0,
+        meal,
+        confidence: 0.25,
+        source: "recipe",
+        user_verified: false,
+        needs_review: true,
+        note: "Unknown ingredient — search or edit macros",
+      });
+      continue;
+    }
+    const serv = servingsFromQty(qty, unit, resolved.food);
+    const d = scaleFoodDraft(
+      resolved.food,
+      serv,
+      meal,
+      resolved.via === "openfoodfacts" ? 0.7 : resolved.confidence,
+      "recipe",
+      resolved.via
+    );
+    d.serving_size = portion;
+    d.note = d.note || "Recipe ingredient — confirm amount";
+    drafts.push(d);
+  }
+
+  return { drafts, name: name || "Recipe", servings };
 }
 
 async function searchOnlineSafe(query) {
