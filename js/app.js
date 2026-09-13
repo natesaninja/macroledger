@@ -96,7 +96,7 @@ import {
   decodeBarcodeFromFile,
   cameraHelp,
 } from "./barcode-scan.js";
-import { searchOpenFoodFacts } from "./food-search.js";
+import { searchOpenFoodFacts, lookupBarcodeProduct } from "./food-search.js";
 import {
   loadLocalBackup,
   loadProfileBackup,
@@ -219,6 +219,7 @@ let currentDate = todayISO();
 let settings = null;
 let selectedFood = null;
 let pendingOff = null;
+let pendingBarcode = "";
 let modalMeal = "breakfast";
 let deferredInstall = null;
 let scanBusy = false;
@@ -960,6 +961,7 @@ function openModal(meal) {
   document.getElementById("add-selected").disabled = true;
   document.getElementById("quick-add-form").hidden = true;
   document.getElementById("barcode-status").hidden = true;
+  hideBarcodeMiss();
   const pAdd = document.getElementById("portion-split-add");
   if (pAdd) pAdd.hidden = true;
   resetPortionFields("add");
@@ -1129,78 +1131,77 @@ function updatePreview() {
   );
 }
 
+function hideBarcodeMiss() {
+  const miss = document.getElementById("barcode-miss");
+  if (miss) miss.hidden = true;
+}
+
+function showBarcodeMiss(code, name = "") {
+  pendingBarcode = code;
+  hideBarcodeMiss();
+  const miss = document.getElementById("barcode-miss");
+  const copy = document.getElementById("barcode-miss-copy");
+  const status = document.getElementById("barcode-status");
+  if (copy) {
+    copy.textContent = name
+      ? `Found “${name}” online but no calories. Photograph the Nutrition Facts panel — we’ll save it with this barcode.`
+      : "Not in the barcode library. Photograph the Nutrition Facts panel on the package — we’ll save it for next time.";
+  }
+  if (miss) miss.hidden = false;
+  if (status) {
+    status.hidden = false;
+    status.className = "barcode-status error";
+    status.textContent = name ? "No macros for that barcode" : "Barcode not found online";
+  }
+  const addBtn = document.getElementById("add-selected");
+  if (addBtn) addBtn.disabled = true;
+}
+
 async function lookupBarcode(raw) {
   const code = String(raw || "").replace(/\D/g, "");
   const status = document.getElementById("barcode-status");
+  hideBarcodeMiss();
   status.hidden = false;
   if (code.length < 8) {
     status.textContent = "Enter at least 8 digits";
     status.className = "barcode-status error";
     return;
   }
-  // Local first
+  pendingBarcode = code;
   const local = await findByBarcode(code);
   if (local) {
     selectedFood = local;
     pendingOff = null;
+    pendingBarcode = local.barcode || code;
     showBarcodeResult(local, "local");
     status.textContent = "Found on this device";
     status.className = "barcode-status ok";
     return;
   }
   if (!navigator.onLine) {
-    status.textContent = "Offline � barcode only works for foods already saved on this device";
+    status.textContent = "Offline — barcode only works for foods already saved on this device";
     status.className = "barcode-status error";
+    showBarcodeMiss(code);
     return;
   }
-  status.textContent = "Looking up online�";
+  status.textContent = "Looking up online…";
   status.className = "barcode-status";
   try {
-    const res = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${code}.json`,
-      { headers: { "User-Agent": "MacroLedgerPWA/1.0" } }
-    );
-    const data = await res.json();
-    if (data.status !== 1 || !data.product) {
-      status.textContent = "Product not found";
-      status.className = "barcode-status error";
+    const hit = await lookupBarcodeProduct(code);
+    if (hit.food) {
+      selectedFood = null;
+      pendingOff = hit.food;
+      pendingBarcode = hit.barcode || code;
+      showBarcodeResult(hit.food, "online");
+      status.textContent = "Found online — will save when you add";
+      status.className = "barcode-status ok";
       return;
     }
-    const p = data.product;
-    const n = p.nutriments || {};
-    let serving = (p.serving_size || "").trim() || "100g";
-    let cal = n["energy-kcal_serving"];
-    let protein = n.proteins_serving;
-    let carbs = n.carbohydrates_serving;
-    let fat = n.fat_serving;
-    let fiber = n.fiber_serving;
-    if (cal == null) {
-      serving = "100g";
-      cal = n["energy-kcal_100g"] ?? n["energy-kcal"];
-      protein = n.proteins_100g;
-      carbs = n.carbohydrates_100g;
-      fat = n.fat_100g;
-      fiber = n.fiber_100g;
-    }
-    const food = {
-      name: (p.product_name || p.product_name_en || "Unknown").slice(0, 200),
-      brand: ((p.brands || "").split(",")[0] || "").trim(),
-      serving_size: serving,
-      calories: Math.round((Number(cal) || 0) * 10) / 10,
-      protein: Math.round((Number(protein) || 0) * 10) / 10,
-      carbs: Math.round((Number(carbs) || 0) * 10) / 10,
-      fat: Math.round((Number(fat) || 0) * 10) / 10,
-      fiber: Math.round((Number(fiber) || 0) * 10) / 10,
-      barcode: code,
-    };
-    selectedFood = null;
-    pendingOff = food;
-    showBarcodeResult(food, "openfoodfacts");
-    status.textContent = "Found online � will save when you add";
-    status.className = "barcode-status ok";
+    showBarcodeMiss(code, hit.name);
   } catch {
     status.textContent = "Lookup failed (need internet)";
     status.className = "barcode-status error";
+    showBarcodeMiss(code);
   }
 }
 
@@ -1570,8 +1571,8 @@ function updatePhotoLogStatus() {
   }
   if (hint) {
     hint.textContent = ready
-      ? `${left} photo scan${left === 1 ? "" : "s"} left today · camera or library · label uses the same limit`
-      : "Photo meal needs internet. Camera or library when you’re online.";
+      ? `${left} photo scan${left === 1 ? "" : "s"} left today · Barcode searches online · Macros = Nutrition Facts photo`
+      : "Barcode works offline for saved foods. Macros photo needs internet.";
   }
 }
 
@@ -1889,6 +1890,9 @@ async function runPhotoMealEstimate(file, mode = "meal") {
       mode === "label"
         ? await estimateLabelFromPhoto(file, meal, cfg)
         : await estimateMealFromPhoto(file, meal, cfg);
+    if (mode === "label" && pendingBarcode) {
+      for (const d of result.drafts) d.barcode = pendingBarcode;
+    }
     openReview(result.drafts);
     updatePhotoLogStatus();
     toast(
@@ -1964,6 +1968,54 @@ function renderReviewList() {
       renderReviewList();
     })
   );
+}
+
+function syncLogDock() {
+  const dock = document.getElementById("log-dock");
+  if (!dock) return;
+  const diaryOn = document.getElementById("view-diary")?.classList.contains("active");
+  const blocking = [...document.querySelectorAll(".modal-backdrop, .onboard-overlay")].some(
+    (el) => el && !el.hidden
+  );
+  dock.hidden = !diaryOn || blocking;
+}
+
+function openSearchLog() {
+  openModal(guessMealSlot());
+  setTimeout(() => document.getElementById("food-search")?.focus(), 80);
+}
+
+function openBarcodeLog() {
+  openModal(guessMealSlot());
+  setTimeout(() => {
+    const wrap = document.getElementById("camera-scan-wrap");
+    if (wrap) wrap.hidden = false;
+    startCamera();
+  }, 300);
+}
+
+async function openMacrosCamera({ keepBarcode = false } = {}) {
+  if (!keepBarcode) pendingBarcode = "";
+  const ready = await ensurePhotoLogReady();
+  if (!ready) return;
+  const input = document.getElementById("label-scan-input");
+  if (!input) return toast("Camera isn’t available");
+  input.value = "";
+  input.click();
+}
+
+function consumeLogHash() {
+  const h = (location.hash || "").replace(/^#/, "").toLowerCase();
+  if (!h) return;
+  try {
+    history.replaceState(null, "", location.pathname + location.search);
+  } catch {
+    /* ok */
+  }
+  if (h === "add" || h === "search") openSearchLog();
+  else if (h === "barcode" || h === "scan") openBarcodeLog();
+  else if (h === "label" || h === "macros") openMacrosCamera();
+  else if (h === "photo" || h === "plate") document.getElementById("btn-photo-log")?.click();
 }
 
 function setup() {
@@ -2045,9 +2097,55 @@ function setup() {
   if (el("btn-photo-log")) {
     el("btn-photo-log").onclick = () => openPhotoSource("meal");
   }
-  if (el("btn-scan-label")) {
-    el("btn-scan-label").onclick = () => openPhotoSource("label");
+  if (el("btn-add-food")) el("btn-add-food").onclick = () => openSearchLog();
+  if (el("btn-scan-label")) el("btn-scan-label").onclick = () => openMacrosCamera();
+  if (el("btn-label-library")) {
+    el("btn-label-library").onclick = async () => {
+      pendingBarcode = "";
+      const ready = await ensurePhotoLogReady();
+      if (!ready) return;
+      const input = el("label-library-input");
+      if (!input) return toast("Photo library isn’t available");
+      input.value = "";
+      input.click();
+    };
   }
+  if (el("dock-search")) el("dock-search").onclick = () => openSearchLog();
+  if (el("dock-barcode")) el("dock-barcode").onclick = () => openBarcodeLog();
+  if (el("dock-label")) el("dock-label").onclick = () => openMacrosCamera();
+  const missLabel = el("barcode-miss-label");
+  if (missLabel) {
+    missLabel.onclick = async () => {
+      closeModal();
+      await openMacrosCamera({ keepBarcode: true });
+    };
+  }
+  if (el("barcode-miss-search")) {
+    el("barcode-miss-search").onclick = () => {
+      hideBarcodeMiss();
+      document.getElementById("food-search")?.focus();
+    };
+  }
+  if (el("barcode-miss-quick")) {
+    el("barcode-miss-quick").onclick = () => {
+      hideBarcodeMiss();
+      const f = document.getElementById("quick-add-form");
+      if (f) f.hidden = false;
+      f?.querySelector("input[name='food_name']")?.focus();
+    };
+  }
+  try {
+    const obs = new MutationObserver(() => syncLogDock());
+    document.querySelectorAll(".modal-backdrop, .onboard-overlay").forEach((node) => {
+      obs.observe(node, { attributes: true, attributeFilter: ["hidden"] });
+    });
+    document.querySelectorAll(".view").forEach((node) => {
+      obs.observe(node, { attributes: true, attributeFilter: ["class"] });
+    });
+  } catch {
+    /* ok */
+  }
+  syncLogDock();
   if (el("photo-source-close")) el("photo-source-close").onclick = closePhotoSource;
   if (sourceModal) {
     sourceModal.addEventListener("click", (e) => {
@@ -2227,6 +2325,7 @@ function setup() {
       );
     }
     reviewDrafts = [];
+    pendingBarcode = "";
     document.getElementById("review-modal").hidden = true;
     loadDay();
   }
@@ -3467,6 +3566,14 @@ async function boot() {
   } catch (err) {
     console.error("loadDay failed", err);
     toast("Couldn’t load your diary — try Restore from file on Progress, or reopen online");
+  }
+
+  try {
+    const onboardOpen = !document.getElementById("onboard")?.hidden;
+    if (!onboardOpen) consumeLogHash();
+    syncLogDock();
+  } catch {
+    /* ok */
   }
 
   // Iron Ledger deep-link: ?iron=1&date=&min=&name=&auto=1

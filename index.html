@@ -8,13 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MacroLedger" />
-  <link rel="manifest" href="manifest.webmanifest?v=37" />
-  <link rel="icon" href="icons/icon-192.png?v=37" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=37" />
+  <link rel="manifest" href="manifest.webmanifest?v=38" />
+  <link rel="icon" href="icons/icon-192.png?v=38" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=38" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/app.css?v=37" />
+  <link rel="stylesheet" href="css/app.css?v=38" />
   <title>MacroLedger</title>
 </head>
 <body>
@@ -35,7 +35,7 @@
       <span><i class="online-dot" id="online-dot"></i><span id="online-label">Online</span></span>
       <span id="streak-chip" class="streak-chip" title="Logging streak">Streak 0</span>
       <span id="storage-label">On this device</span>
-      <span id="app-version" class="app-version">v37</span>
+      <span id="app-version" class="app-version">v38</span>
     </div>
 
     <div class="install-banner" id="install-banner">
@@ -109,6 +109,37 @@
         </div>
 
         <div class="week-strip" id="training-week-strip" aria-label="Training week" hidden></div>
+
+        <!-- Log first — don't bury add-food under the ring -->
+        <div class="quick-log card-lite">
+          <div class="quick-log-title">Log food</div>
+          <div class="quick-actions">
+            <button type="button" class="chip-btn primary-chip" id="btn-add-food">Search</button>
+            <button type="button" class="chip-btn primary-chip" id="btn-scan-barcode">Barcode</button>
+            <button type="button" class="chip-btn primary-chip" id="btn-scan-label">Scan macros</button>
+            <button type="button" class="chip-btn primary-chip" id="btn-photo-log">Plate photo</button>
+          </div>
+          <p class="hint photo-log-hint" id="photo-log-hint" style="margin:0.15rem 0 0.35rem">
+            Barcode looks online. No match? Photograph the Nutrition Facts panel.
+          </p>
+          <details class="quick-more">
+            <summary class="quick-more-sum">Voice, meals, recents</summary>
+            <div class="quick-actions quick-more-actions">
+              <button type="button" class="chip-btn" id="btn-voice-log">Voice / text</button>
+              <button type="button" class="chip-btn" id="btn-restaurant-build">Restaurant</button>
+              <button type="button" class="chip-btn" id="btn-show-saved-meals">Meals</button>
+              <button type="button" class="chip-btn" id="btn-show-again">Again</button>
+              <button type="button" class="chip-btn" id="btn-show-recents">Recents</button>
+              <button type="button" class="chip-btn" id="btn-show-favs">Favorites</button>
+              <button type="button" class="chip-btn" id="btn-label-library">Macros from photos</button>
+            </div>
+          </details>
+          <input type="file" id="photo-log-input" accept="image/*" capture="environment" hidden />
+          <input type="file" id="photo-library-input" accept="image/*" hidden />
+          <input type="file" id="label-scan-input" accept="image/*" capture="environment" hidden />
+          <input type="file" id="label-library-input" accept="image/*" hidden />
+          <div class="quick-rail" id="quick-rail"></div>
+        </div>
 
         <!-- Post Iron Ledger session: protein nudge + meal shortcut -->
         <div class="iron-handoff-card" id="iron-handoff-card" hidden>
@@ -225,35 +256,6 @@
               <button type="button" class="ghost-btn" id="fasting-clear-meal">Use schedule only</button>
             </div>
           </div>
-        </div>
-
-        <!-- One-tap logging strip (primary chips + more) -->
-        <div class="quick-log card-lite">
-          <div class="quick-log-title">Quick log</div>
-          <div class="quick-actions">
-            <button type="button" class="chip-btn primary-chip" id="btn-photo-log">Photo meal</button>
-            <button type="button" class="chip-btn primary-chip" id="btn-scan-barcode">Barcode</button>
-            <button type="button" class="chip-btn primary-chip" id="btn-voice-log">Voice / text</button>
-            <button type="button" class="chip-btn primary-chip" id="btn-restaurant-build">Restaurant</button>
-            <button type="button" class="chip-btn primary-chip" id="btn-show-saved-meals">Meals</button>
-          </div>
-          <p class="hint photo-log-hint" id="photo-log-hint" style="margin:0.15rem 0 0.35rem">
-            Photo = plate · camera or library · free daily limit
-          </p>
-          <details class="quick-more">
-            <summary class="quick-more-sum">More ways to log</summary>
-            <div class="quick-actions quick-more-actions">
-              <button type="button" class="chip-btn" id="btn-scan-label">Scan label</button>
-              <button type="button" class="chip-btn" id="btn-show-again">Again</button>
-              <button type="button" class="chip-btn" id="btn-show-recents">Recents</button>
-              <button type="button" class="chip-btn" id="btn-show-favs">Favorites</button>
-            </div>
-          </details>
-          <input type="file" id="photo-log-input" accept="image/*" capture="environment" hidden />
-          <input type="file" id="photo-library-input" accept="image/*" hidden />
-          <input type="file" id="label-scan-input" accept="image/*" capture="environment" hidden />
-          <input type="file" id="label-library-input" accept="image/*" hidden />
-          <div class="quick-rail" id="quick-rail"></div>
         </div>
 
         <!-- Iron Ledger bridge -->
@@ -642,15 +644,28 @@
         </div>
 
         <div class="card info-card">
+          <h3 class="card-title">Fastest way to log</h3>
+          <p class="hint" style="margin-top:0">
+            Open the app — the bottom bar is always there on Diary. You don’t have to scroll.
+          </p>
+          <ol class="info-steps">
+            <li><strong>Search</strong> — type a name. Online results fill macros.</li>
+            <li><strong>Barcode</strong> — we look up Open Food Facts (not just foods already in the app).</li>
+            <li>If the barcode isn’t found: <strong>Scan macros on package</strong> — photo the Nutrition Facts panel.</li>
+            <li>Save once. Next time Search or Barcode finds it on this phone.</li>
+          </ol>
+        </div>
+
+        <div class="card info-card">
           <h3 class="card-title">Scan nutrition label</h3>
           <p class="hint" style="margin-top:0">
             Point at a package <strong>Nutrition Facts</strong> panel — we fill calories and macros for you.
           </p>
           <ol class="info-steps">
-            <li>Diary → <strong>Scan label</strong> (or Add food → Scan label).</li>
-            <li>Take a photo or pick one from your library — fill the frame with the facts panel, good light, no glare.</li>
+            <li>Tap <strong>Macros</strong> on the bottom bar (or Scan macros on Diary).</li>
+            <li>Photograph the Nutrition Facts panel — or pick one from your library.</li>
             <li>Review the numbers, set servings if you ate more than one serving.</li>
-            <li>Save — the product is added to <strong>Foods</strong> so you can search it next time.</li>
+            <li>Save — the product is added to <strong>Foods</strong>. If you scanned a barcode first, we keep that UPC too.</li>
           </ol>
           <p class="hint">Uses the same free daily photo limit as Photo meal. Barcode is still best when a UPC is on the package.</p>
         </div>
@@ -663,7 +678,7 @@
           </p>
           <ol class="info-steps">
             <li>Open the <strong>Diary</strong> tab.</li>
-            <li>Tap <strong>Photo meal</strong>.</li>
+            <li>Tap <strong>Plate photo</strong>.</li>
             <li>Take a photo or pick one from your library (good light, whole plate).</li>
             <li>Wait a few seconds, then check the list and tap <strong>Save all</strong>.</li>
           </ol>
@@ -790,6 +805,14 @@
           </p>
         </div>
         <p class="barcode-status" id="barcode-status" hidden></p>
+        <div class="barcode-miss" id="barcode-miss" hidden>
+          <p class="barcode-miss-copy" id="barcode-miss-copy">Not in the barcode library.</p>
+          <div class="barcode-miss-actions">
+            <button type="button" class="primary-btn" id="barcode-miss-label">Scan macros on package</button>
+            <button type="button" class="ghost-btn" id="barcode-miss-search">Search by name</button>
+            <button type="button" class="ghost-btn" id="barcode-miss-quick">Type calories</button>
+          </div>
+        </div>
         <input type="search" id="food-search" class="search-input" placeholder="Search foods (online fills macros)…" />
         <p class="hint" style="margin:0.35rem 0 0.5rem">
           Type a name (e.g. greek yogurt). Local matches first; online results fill calories &amp; macros for you. Needs internet.
@@ -814,7 +837,7 @@
         <div class="modal-footer">
           <button type="button" class="ghost-btn" id="quick-add-toggle">Quick add</button>
           <label class="ghost-btn export-link" style="cursor:pointer" id="add-scan-label-btn">
-            Scan label
+            Scan macros
             <input type="file" id="add-label-input" accept="image/*" capture="environment" hidden />
           </label>
           <button type="button" class="primary-btn" id="add-selected" disabled>Add</button>
@@ -987,9 +1010,25 @@
     </div>
   </div>
 
+  <!-- Always-on log dock (diary) — solid, no blur (iPhone scroll-safe) -->
+  <nav class="log-dock" id="log-dock" aria-label="Log food">
+    <button type="button" class="log-dock-btn" id="dock-search">
+      <span class="log-dock-icon" aria-hidden="true">⌕</span>
+      Search
+    </button>
+    <button type="button" class="log-dock-btn" id="dock-barcode">
+      <span class="log-dock-icon" aria-hidden="true">|||</span>
+      Barcode
+    </button>
+    <button type="button" class="log-dock-btn primary" id="dock-label">
+      <span class="log-dock-icon" aria-hidden="true">▤</span>
+      Macros
+    </button>
+  </nav>
+
   <div class="toast" id="toast" hidden></div>
   <!-- iOS-friendly barcode scanner (BarcodeDetector is weak/missing on Safari) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
-  <script type="module" src="js/app.js?v=37"></script>
+  <script type="module" src="js/app.js?v=38"></script>
 </body>
 </html>

@@ -5,7 +5,24 @@
 
 const OFF_SEARCH =
   "https://world.openfoodfacts.org/cgi/search.pl";
+const OFF_HOSTS = [
+  "https://world.openfoodfacts.org",
+  "https://us.openfoodfacts.org",
+];
 const UA = "MacroLedger/1.0 (https://github.com/natesaninja/macroledger)";
+
+/** UPC-A is 12 digits; OFF often stores the EAN-13 with a leading 0. */
+export function barcodeVariants(code) {
+  const digits = String(code || "").replace(/\D/g, "");
+  const out = [];
+  const add = (c) => {
+    if (c && !out.includes(c)) out.push(c);
+  };
+  add(digits);
+  if (digits.length === 12) add(`0${digits}`);
+  if (digits.length === 13 && digits.startsWith("0")) add(digits.slice(1));
+  return out;
+}
 
 function num(...vals) {
   for (const v of vals) {
@@ -109,4 +126,55 @@ export async function searchOpenFoodFacts(query, limit = 12) {
     if (out.length >= limit) break;
   }
   return out;
+}
+
+async function fetchOffProduct(host, code) {
+  const url =
+    `${host}/api/v2/product/${encodeURIComponent(code)}.json` +
+    `?fields=code,product_name,product_name_en,generic_name,brands,serving_size,nutriments`;
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": UA },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (data.status !== 1 || !data.product) return null;
+  return data.product;
+}
+
+/**
+ * Barcode → food with macros.
+ * Tries Open Food Facts (world + US, UPC/EAN variants).
+ * @returns {Promise<{ food: object|null, name: string, barcode: string, via: string }>}
+ */
+export async function lookupBarcodeProduct(code) {
+  const variants = barcodeVariants(code);
+  const barcode = variants[0] || "";
+  if (barcode.length < 8) {
+    return { food: null, name: "", barcode, via: "invalid" };
+  }
+  if (!navigator.onLine) {
+    return { food: null, name: "", barcode, via: "offline" };
+  }
+
+  let named = "";
+  for (const host of OFF_HOSTS) {
+    for (const c of variants) {
+      try {
+        const product = await fetchOffProduct(host, c);
+        if (!product) continue;
+        named =
+          String(
+            product.product_name || product.product_name_en || product.generic_name || ""
+          ).trim() || named;
+        const food = productToFood({ ...product, code: product.code || c });
+        if (food) {
+          food.barcode = c;
+          return { food, name: food.name, barcode: c, via: "openfoodfacts" };
+        }
+      } catch {
+        /* try next host/code */
+      }
+    }
+  }
+  return { food: null, name: named, barcode, via: named ? "off_empty" : "not_found" };
 }

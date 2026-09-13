@@ -2276,7 +2276,72 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 .app.safe-bottom {
-  padding-bottom: max(2rem, calc(1rem + env(safe-area-inset-bottom)));
+  padding-bottom: max(5.75rem, calc(4.75rem + env(safe-area-inset-bottom)));
+}
+
+.log-dock {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  z-index: 50;
+  width: 100%;
+  max-width: 720px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem calc(0.45rem + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-sizing: border-box;
+}
+.log-dock[hidden] {
+  display: none;
+}
+.log-dock-btn {
+  min-height: 48px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  cursor: pointer;
+}
+.log-dock-btn.primary {
+  background: var(--accent-dim);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--accent);
+}
+.log-dock-icon {
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+.barcode-miss {
+  margin: 0.55rem 0 0.35rem;
+  padding: 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+}
+.barcode-miss[hidden] {
+  display: none;
+}
+.barcode-miss-copy {
+  margin: 0 0 0.55rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.barcode-miss-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 /* Larger tap targets on touch */
 @media (pointer: coarse) {
